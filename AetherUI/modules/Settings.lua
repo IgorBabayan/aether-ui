@@ -88,7 +88,8 @@ function Settings:Initialize(sv)
         {
             type = "checkbox",
             name = "Unlock bars",
-            tooltip = "Drag the bars to a new position. Locked again when this page closes.",
+            tooltip = "Drag the bars to a new position. Locked again when this page closes.\n"
+                .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.",
             getFunc = function() return RB.unlocked end,
             setFunc = function(value) RB:SetUnlocked(value) end,
             default = false,
@@ -97,10 +98,7 @@ function Settings:Initialize(sv)
             type = "button",
             name = "Reset position",
             tooltip = "Move the bars back to the default ESO position.",
-            func = function()
-                bars.point = nil
-                RB:ApplyPosition()
-            end,
+            func = function() RB:ResetPosition() end,
             width = "half",
         },
     })

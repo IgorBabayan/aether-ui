@@ -16,20 +16,28 @@
 --     then unregisters itself (zero per-frame cost while idle)
 --   * widths/alphas are cached; the C side is only touched when a value changes
 --   * looping effects run on native AnimationTimelines, not Lua
+--   * dragging: the per-bar drag poll is registered only while a bar is held
+--
+-- Positioning (unlock mode):
+--   * "default" layout: each bar is dragged on its own; positions saved per bar
+--   * any other layout: the whole group is dragged together
 
 local AUI = AetherUI
 local EM = EVENT_MANAGER
 
 local GetFrameTimeMilliseconds = GetFrameTimeMilliseconds
 local GetUnitPower = GetUnitPower
+local GetUIMousePosition = GetUIMousePosition
 local mexp, mmin, mmax = math.exp, math.min, math.max
 
 local NAME = "AetherUI_ResourceBars"
+local DRAG_NAME = NAME .. "Drag"
 
 -- Layout ---------------------------------------------------------------------
 local BAR_HEIGHT = 11
 local BAR_GAP = 64           -- room for caps + spikes between bars (default layout)
 local FRAME_PAD = 70         -- caps + spikes overhang (both ends) for the drag frame
+local DRAG_PAD_X, DRAG_PAD_Y = 34, 10 -- grab area around a bar (caps + spikes)
 
 -- Motion tuning --------------------------------------------------------------
 local FILL_RATE_DOWN = 18    -- exponential approach rates (1/s)
@@ -96,19 +104,25 @@ local PYR_HP_W, PYR_GAP, PYR_ROW = 360, 30, 14
 local PYR_SIDE_W = (PYR_HP_W - PYR_GAP) / 2
 local COL_W, COL_ROW = 300, 12
 
+local DEF_W = 300
+local DEF_SIDE_OFFSET = DEF_W / 2 + BAR_GAP
+
+-- separate = true: bars can be dragged one by one (each anchored to the
+-- top-level on its own, so moving one never drags the others along).
 local LAYOUTS = {
     -- Skyrim: Magicka | Health | Stamina in one row.
     default = {
+        separate = true,
         bars = {
-            [H] = { width = 300, grow = "center", label = "top" },
-            [M] = { width = 300, grow = "right", label = "top" },
-            [S] = { width = 300, grow = "left", label = "top" },
+            [H] = { width = DEF_W, grow = "center", label = "top" },
+            [M] = { width = DEF_W, grow = "right", label = "top" },
+            [S] = { width = DEF_W, grow = "left", label = "top" },
         },
-        width = 300 * 3 + BAR_GAP * 2 + FRAME_PAD, height = 44,
+        width = DEF_W * 3 + BAR_GAP * 2 + FRAME_PAD, height = 44,
         Anchor = function(tl, h, m, s)
             h:SetAnchor(CENTER, tl, CENTER, 0, 0)
-            m:SetAnchor(RIGHT, h, LEFT, -BAR_GAP, 0)
-            s:SetAnchor(LEFT, h, RIGHT, BAR_GAP, 0)
+            m:SetAnchor(RIGHT, tl, CENTER, -DEF_SIDE_OFFSET, 0)
+            s:SetAnchor(LEFT, tl, CENTER, DEF_SIDE_OFFSET, 0)
         end,
     },
     -- Bandits UI style: wide Health on top, Magicka + Stamina side by side under it.
@@ -232,6 +246,9 @@ function Bar:Initialize(parent, powerType, style)
     self.shieldTex, self.flashTex, self.glowTex, self.alertTex = child("Shield"), child("Flash"), child("Glow"), child("Alert")
     self.valueLabel = child("Value")
     self.spikeL, self.spikeR = child("SpikeL"), child("SpikeR")
+    self.dragOverlay, self.dragLabel = child("DragOverlay"), child("DragLabel")
+    self.dragLabel:SetText(style.key)
+    c:SetHitInsets(-DRAG_PAD_X, -DRAG_PAD_Y, DRAG_PAD_X, DRAG_PAD_Y)
     self.width = 0
 
     for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex }) do
@@ -459,6 +476,7 @@ function RB:Initialize(sv)
     self.sv = sv.bars
     self.inCombat = IsUnitInCombat("player")
     self.unlocked = false
+    if type(self.sv.points) ~= "table" then self.sv.points = {} end
 
     local tl = AetherUI_Bars
     self.topLevel = tl
@@ -472,6 +490,16 @@ function RB:Initialize(sv)
     self.bars[POWERTYPE_MAGICKA] = magicka
     self.bars[POWERTYPE_STAMINA] = stamina
     self.health = health
+
+    for _, bar in pairs(self.bars) do
+        local c = bar.control
+        c:SetHandler("OnMouseDown", function(_, button)
+            if button == MOUSE_BUTTON_INDEX_LEFT then self:BeginDrag(bar) end
+        end)
+        c:SetHandler("OnMouseUp", function(_, button)
+            if button == MOUSE_BUTTON_INDEX_LEFT then self:EndDrag() end
+        end)
+    end
 
     if not LAYOUTS[self.sv.layout] then self.sv.layout = "default" end
     self:ApplyLayout()
@@ -573,13 +601,32 @@ function RB:ApplyLayout()
     end
     layout.Anchor(tl, h.control, m.control, s.control)
     tl:SetDimensions(layout.width, layout.height)
+
+    -- Default layout: bars the player has moved sit at their own saved spot.
+    if layout.separate then
+        local points = self.sv.points
+        for _, bar in pairs(self.bars) do
+            local p = points[bar.style.key]
+            if p then
+                bar.control:ClearAnchors()
+                bar.control:SetAnchor(CENTER, GuiRoot, TOPLEFT, p.x, p.y)
+            end
+        end
+    end
+end
+
+function RB:IsSeparateLayout()
+    local layout = LAYOUTS[self.sv.layout] or LAYOUTS.default
+    return layout.separate == true
 end
 
 function RB:SetLayout(name)
     if not LAYOUTS[name] then return false end
     if self.sv.layout ~= name then
+        self:EndDrag()
         self.sv.layout = name
         self:ApplyLayout()
+        if self.unlocked then self:ApplyDragMode() end
     end
     return true
 end
@@ -624,18 +671,86 @@ function RB:ApplyPosition()
     end
 end
 
+function RB:ResetPosition()
+    self:EndDrag()
+    self.sv.point = nil
+    ZO_ClearTable(self.sv.points)
+    self:ApplyPosition()
+    self:ApplyLayout()
+end
+
+-- Group drag (non-default layouts): native movable top-level.
 function RB:OnMoveStop()
     local x, y = self.topLevel:GetCenter()
     self.sv.point = { x = x, y = y }
 end
 
-function RB:SetUnlocked(unlocked)
-    self.unlocked = unlocked
+-- Per-bar drag (default layout). The poll runs only while a bar is held and
+-- skips work when the cursor has not moved.
+local dragBar, dragDX, dragDY, dragMX, dragMY
+
+local function MoveDraggedBar(force)
+    local mx, my = GetUIMousePosition()
+    if not force and mx == dragMX and my == dragMY then return end
+    dragMX, dragMY = mx, my
+
+    local c = dragBar.control
+    local sw, sh = GuiRoot:GetDimensions()
+    local hw, hh = c:GetWidth() / 2 + DRAG_PAD_X, c:GetHeight() / 2 + DRAG_PAD_Y
+    local x = zo_clamp(mx + dragDX, hw, sw - hw)
+    local y = zo_clamp(my + dragDY, hh, sh - hh)
+    c:ClearAnchors()
+    c:SetAnchor(CENTER, GuiRoot, TOPLEFT, x, y)
+    return x, y
+end
+
+local function OnDragUpdate()
+    MoveDraggedBar(false)
+end
+
+function RB:BeginDrag(bar)
+    if not (self.unlocked and self:IsSeparateLayout()) or dragBar then return end
+    dragBar = bar
+    local cx, cy = bar.control:GetCenter()
+    local mx, my = GetUIMousePosition()
+    dragDX, dragDY = cx - mx, cy - my
+    dragMX, dragMY = mx, my
+    EM:RegisterForUpdate(DRAG_NAME, 0, OnDragUpdate)
+end
+
+function RB:EndDrag()
+    if not dragBar then return end
+    EM:UnregisterForUpdate(DRAG_NAME)
+    local bar = dragBar
+    local x, y = MoveDraggedBar(true)
+    dragBar = nil
+    self.sv.points[bar.style.key] = { x = x, y = y }
+end
+
+-- Switch mouse handling between per-bar and group dragging.
+function RB:ApplyDragMode()
+    local unlocked = self.unlocked
+    local separate = self:IsSeparateLayout()
+    local group = unlocked and not separate
+    local perBar = unlocked and separate
+
     local tl = self.topLevel
-    tl:SetMouseEnabled(unlocked)
-    tl:SetMovable(unlocked)
-    tl:GetNamedChild("DragOverlay"):SetHidden(not unlocked)
-    tl:GetNamedChild("DragLabel"):SetHidden(not unlocked)
+    tl:SetMouseEnabled(group)
+    tl:SetMovable(group)
+    tl:GetNamedChild("DragOverlay"):SetHidden(not group)
+    tl:GetNamedChild("DragLabel"):SetHidden(not group)
+
+    for _, bar in pairs(self.bars) do
+        bar.control:SetMouseEnabled(perBar)
+        bar.dragOverlay:SetHidden(not perBar)
+        bar.dragLabel:SetHidden(not perBar)
+    end
+end
+
+function RB:SetUnlocked(unlocked)
+    if not unlocked then self:EndDrag() end
+    self.unlocked = unlocked
+    self:ApplyDragMode()
     self:WakeAll()
 end
 
@@ -646,13 +761,16 @@ end
 function RB:HandleCommand(cmd, rest)
     if cmd == "unlock" then
         self:SetUnlocked(true)
-        AUI:Print("bars unlocked. Drag them, then /aether lock")
+        if self:IsSeparateLayout() then
+            AUI:Print("bars unlocked. Drag each bar, then /aether lock")
+        else
+            AUI:Print("bars unlocked. Drag the group, then /aether lock")
+        end
     elseif cmd == "lock" then
         self:SetUnlocked(false)
         AUI:Print("bars locked.")
     elseif cmd == "reset" then
-        self.sv.point = nil
-        self:ApplyPosition()
+        self:ResetPosition()
         AUI:Print("bar position reset.")
     elseif cmd == "numbers" then
         self:SetNumbers(not self.sv.showNumbers)

@@ -35,6 +35,14 @@
         <Control name="AetherUI_ResourceBar" virtual="true">
             <Dimensions x="300" y="11" />
             <Controls>
+                <!-- Unlock mode, default layout: per-bar drag highlight + name. -->
+                <Texture name="$(parent)DragOverlay" color="C8A464" alpha="0.18" hidden="true" level="0">
+                    <Anchor point="TOPLEFT" offsetX="-34" offsetY="-10" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="34" offsetY="10" />
+                </Texture>
+                <Label name="$(parent)DragLabel" font="ZoFontGameSmall" color="E8DCC0" hidden="true" level="16">
+                    <Anchor point="TOP" relativePoint="BOTTOM" offsetY="12" />
+                </Label>
                 <Texture name="$(parent)Glow" alpha="0" hidden="true" level="1">
                     <Anchor point="TOPLEFT" offsetX="-7" offsetY="-6" />
                     <Anchor point="BOTTOMRIGHT" offsetX="7" offsetY="6" />

@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.2.0"
+AUI.version = "0.3.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -14,8 +14,31 @@ local DEFAULTS = {
         layout = "default",  -- "default" | "pyramid" | "columns"
         showNumbers = false, -- Skyrim shows no numbers by default
         point = nil,         -- { x, y } center of the bar group; nil = default ESO position
+        points = {},         -- default layout only: per-bar { x, y } centers keyed by bar ("Health", ...)
     },
 }
+
+-- One fixed profile instead of ESO's default (GetWorldName()), so settings are
+-- shared by every character on the account on every server (NA / EU / PTS).
+local SV_PROFILE = "Account"
+
+-- Older builds stored settings under the current server name. Move them to the
+-- shared profile once, so nothing is lost on upgrade.
+local function MigrateServerProfile()
+    local raw = AetherUI_SV
+    if type(raw) ~= "table" then return end
+    local display = GetDisplayName()
+    local shared = raw[SV_PROFILE]
+    if shared and shared[display] and shared[display]["$AccountWide"] then return end
+
+    local world = raw[GetWorldName()]
+    local old = world and world[display] and world[display]["$AccountWide"]
+    if not old then return end
+
+    raw[SV_PROFILE] = shared or {}
+    raw[SV_PROFILE][display] = { ["$AccountWide"] = old }
+    world[display]["$AccountWide"] = nil
+end
 
 function AUI:RegisterModule(name, module)
     module.moduleName = name
@@ -43,7 +66,8 @@ local function OnAddOnLoaded(_, addonName)
     if addonName ~= AUI.name then return end
     EVENT_MANAGER:UnregisterForEvent(AUI.name, EVENT_ADD_ON_LOADED)
 
-    AUI.sv = ZO_SavedVars:NewAccountWide("AetherUI_SV", SV_VERSION, nil, DEFAULTS)
+    MigrateServerProfile()
+    AUI.sv = ZO_SavedVars:NewAccountWide("AetherUI_SV", SV_VERSION, nil, DEFAULTS, SV_PROFILE)
 
     for i = 1, #AUI.modules do
         AUI.modules[i]:Initialize(AUI.sv)
