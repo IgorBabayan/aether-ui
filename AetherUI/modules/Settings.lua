@@ -27,6 +27,19 @@ local LAYOUT_TOOLTIPS = {
     columns = "Health, Magicka and Stamina stacked in a single column (LUI style).",
 }
 
+local TEXT_LABELS = {
+    none = "None",
+    value = "Value",
+    percent = "Percentage",
+    both = "Value + percentage",
+}
+local TEXT_TOOLTIPS = {
+    none = "No text. Slim Skyrim-style bars.",
+    value = "Current / max, e.g. 18,240 / 24,000.",
+    percent = "Percentage, e.g. 76%.",
+    both = "Current / max and percentage, e.g. 18,240 / 24,000  (76%).",
+}
+
 function Settings:Initialize(sv)
     local LAM = LibAddonMenu2
     if not LAM then return end
@@ -39,6 +52,12 @@ function Settings:Initialize(sv)
         layoutValues[i] = key
         layoutNames[i] = LAYOUT_LABELS[key] or key
         layoutTips[i] = LAYOUT_TOOLTIPS[key] or ""
+    end
+
+    local textNames, textTips = {}, {}
+    for i, key in ipairs(RB.TEXT_ORDER) do
+        textNames[i] = TEXT_LABELS[key] or key
+        textTips[i] = TEXT_TOOLTIPS[key] or ""
     end
 
     local panel = LAM:RegisterAddonPanel(PANEL_NAME, {
@@ -76,12 +95,15 @@ function Settings:Initialize(sv)
             default = "default",
         },
         {
-            type = "checkbox",
-            name = "Show numbers",
-            tooltip = "Show current / max values next to each bar.",
-            getFunc = function() return bars.showNumbers end,
-            setFunc = function(value) RB:SetNumbers(value) end,
-            default = false,
+            type = "dropdown",
+            name = "Bar text",
+            tooltip = "Text drawn inside each bar. Bars get taller while text is shown.",
+            choices = textNames,
+            choicesValues = RB.TEXT_ORDER,
+            choicesTooltips = textTips,
+            getFunc = function() return bars.text end,
+            setFunc = function(value) RB:SetTextMode(value) end,
+            default = "none",
         },
 
         { type = "header", name = "Position" },

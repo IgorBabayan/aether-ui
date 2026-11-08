@@ -16,7 +16,9 @@
 --     then unregisters itself (zero per-frame cost while idle)
 --   * widths/alphas are cached; the C side is only touched when a value changes
 --   * looping effects run on native AnimationTimelines, not Lua
---   * dragging: the per-bar drag poll is registered only while a bar is held
+--   * dragging: the drag poll is registered only while something is held and
+--     skips frames where the cursor has not moved
+--   * bar text is cached; SetText runs only when the shown string changes
 --
 -- Positioning (unlock mode):
 --   * "default" layout: each bar is dragged on its own; positions saved per bar
@@ -28,13 +30,18 @@ local EM = EVENT_MANAGER
 local GetFrameTimeMilliseconds = GetFrameTimeMilliseconds
 local GetUnitPower = GetUnitPower
 local GetUIMousePosition = GetUIMousePosition
+local ZO_CommaDelimitNumber = ZO_CommaDelimitNumber
+local zo_round = zo_round
+local sfmt = string.format
 local mexp, mmin, mmax = math.exp, math.min, math.max
 
 local NAME = "AetherUI_ResourceBars"
 local DRAG_NAME = NAME .. "Drag"
 
 -- Layout ---------------------------------------------------------------------
-local BAR_HEIGHT = 11
+-- Slim Skyrim bars without text; taller bars when text is drawn inside.
+local BAR_HEIGHT_SLIM = 11
+local BAR_HEIGHT_TEXT = 18
 local BAR_GAP = 64           -- room for caps + spikes between bars (default layout)
 local FRAME_PAD = 70         -- caps + spikes overhang (both ends) for the drag frame
 local DRAG_PAD_X, DRAG_PAD_Y = 34, 10 -- grab area around a bar (caps + spikes)
@@ -96,7 +103,6 @@ local ANCHOR_POINT = { center = CENTER, left = LEFT, right = RIGHT }
 -- changes, so layouts cost nothing per frame.
 --   width  : bar length in px
 --   grow   : edge the fill is pinned to (see STYLES)
---   label  : where the value text sits ("top" | "bottom" | "right")
 --   spikeL / spikeR : false hides that decorative spike
 local H, M, S = POWERTYPE_HEALTH, POWERTYPE_MAGICKA, POWERTYPE_STAMINA
 
@@ -109,16 +115,17 @@ local DEF_SIDE_OFFSET = DEF_W / 2 + BAR_GAP
 
 -- separate = true: bars can be dragged one by one (each anchored to the
 -- top-level on its own, so moving one never drags the others along).
+-- Size(bh) and Anchor(..., bh) take the current bar height.
 local LAYOUTS = {
     -- Skyrim: Magicka | Health | Stamina in one row.
     default = {
         separate = true,
         bars = {
-            [H] = { width = DEF_W, grow = "center", label = "top" },
-            [M] = { width = DEF_W, grow = "right", label = "top" },
-            [S] = { width = DEF_W, grow = "left", label = "top" },
+            [H] = { width = DEF_W, grow = "center" },
+            [M] = { width = DEF_W, grow = "right" },
+            [S] = { width = DEF_W, grow = "left" },
         },
-        width = DEF_W * 3 + BAR_GAP * 2 + FRAME_PAD, height = 44,
+        Size = function(bh) return DEF_W * 3 + BAR_GAP * 2 + FRAME_PAD, bh + 33 end,
         Anchor = function(tl, h, m, s)
             h:SetAnchor(CENTER, tl, CENTER, 0, 0)
             m:SetAnchor(RIGHT, tl, CENTER, -DEF_SIDE_OFFSET, 0)
@@ -128,13 +135,13 @@ local LAYOUTS = {
     -- Bandits UI style: wide Health on top, Magicka + Stamina side by side under it.
     pyramid = {
         bars = {
-            [H] = { width = PYR_HP_W, grow = "center", label = "top" },
-            [M] = { width = PYR_SIDE_W, grow = "right", label = "bottom", spikeR = false },
-            [S] = { width = PYR_SIDE_W, grow = "left", label = "bottom", spikeL = false },
+            [H] = { width = PYR_HP_W, grow = "center" },
+            [M] = { width = PYR_SIDE_W, grow = "right", spikeR = false },
+            [S] = { width = PYR_SIDE_W, grow = "left", spikeL = false },
         },
-        width = PYR_HP_W + FRAME_PAD, height = BAR_HEIGHT * 2 + PYR_ROW + 44,
-        Anchor = function(tl, h, m, s)
-            h:SetAnchor(CENTER, tl, CENTER, 0, -(BAR_HEIGHT + PYR_ROW) / 2)
+        Size = function(bh) return PYR_HP_W + FRAME_PAD, bh * 2 + PYR_ROW + 22 end,
+        Anchor = function(tl, h, m, s, bh)
+            h:SetAnchor(CENTER, tl, CENTER, 0, -(bh + PYR_ROW) / 2)
             m:SetAnchor(TOPLEFT, h, BOTTOMLEFT, 0, PYR_ROW)
             s:SetAnchor(TOPRIGHT, h, BOTTOMRIGHT, 0, PYR_ROW)
         end,
@@ -142,13 +149,13 @@ local LAYOUTS = {
     -- LUI style: Health / Magicka / Stamina stacked in one column, filled from the left.
     columns = {
         bars = {
-            [H] = { width = COL_W, grow = "left", label = "right" },
-            [M] = { width = COL_W, grow = "left", label = "right" },
-            [S] = { width = COL_W, grow = "left", label = "right" },
+            [H] = { width = COL_W, grow = "left" },
+            [M] = { width = COL_W, grow = "left" },
+            [S] = { width = COL_W, grow = "left" },
         },
-        width = COL_W + FRAME_PAD, height = BAR_HEIGHT * 3 + COL_ROW * 2 + 20,
-        Anchor = function(tl, h, m, s)
-            h:SetAnchor(CENTER, tl, CENTER, 0, -(BAR_HEIGHT + COL_ROW))
+        Size = function(bh) return COL_W + FRAME_PAD, bh * 3 + COL_ROW * 2 + 20 end,
+        Anchor = function(tl, h, m, s, bh)
+            h:SetAnchor(CENTER, tl, CENTER, 0, -(bh + COL_ROW))
             m:SetAnchor(TOP, h, BOTTOM, 0, COL_ROW)
             s:SetAnchor(TOP, m, BOTTOM, 0, COL_ROW)
         end,
@@ -156,7 +163,20 @@ local LAYOUTS = {
 }
 local LAYOUT_ORDER = { "default", "pyramid", "columns" }
 
-local LABEL_OFFSET_SIDE = 34 -- clears cap + spike
+-- Bar text ---------------------------------------------------------------------
+local TEXT_NONE, TEXT_VALUE, TEXT_PERCENT, TEXT_BOTH = "none", "value", "percent", "both"
+local TEXT_ORDER = { TEXT_NONE, TEXT_VALUE, TEXT_PERCENT, TEXT_BOTH }
+local TEXT_VALID = { none = true, value = true, percent = true, both = true }
+
+local function FormatText(mode, cur, max)
+    local pct = max > 0 and zo_round(cur / max * 100) or 0
+    if mode == TEXT_PERCENT then
+        return sfmt("%d%%", pct)
+    elseif mode == TEXT_BOTH then
+        return sfmt("%s / %s  (%d%%)", ZO_CommaDelimitNumber(cur), ZO_CommaDelimitNumber(max), pct)
+    end
+    return sfmt("%s / %s", ZO_CommaDelimitNumber(cur), ZO_CommaDelimitNumber(max))
+end
 
 local function SetGradient(tex, top, bottom)
     tex:SetColor(1, 1, 1, 1)
@@ -246,15 +266,13 @@ function Bar:Initialize(parent, powerType, style)
     self.shieldTex, self.flashTex, self.glowTex, self.alertTex = child("Shield"), child("Flash"), child("Glow"), child("Alert")
     self.valueLabel = child("Value")
     self.spikeL, self.spikeR = child("SpikeL"), child("SpikeR")
+    self.capL, self.capR = child("CapL"), child("CapR")
+    self.capLInner, self.capRInner = child("CapLInner"), child("CapRInner")
+    self.text = nil    -- last string handed to the label
     self.dragOverlay, self.dragLabel = child("DragOverlay"), child("DragLabel")
     self.dragLabel:SetText(style.key)
     c:SetHitInsets(-DRAG_PAD_X, -DRAG_PAD_Y, DRAG_PAD_X, DRAG_PAD_Y)
     self.width = 0
-
-    for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex }) do
-        tex:SetHeight(BAR_HEIGHT)
-    end
-    self.shieldTex:SetHeight(BAR_HEIGHT)
 
     -- Look
     SetGradient(child("Track"), FRAME.trackTop, FRAME.trackBottom)
@@ -293,9 +311,24 @@ function Bar:Initialize(parent, powerType, style)
 end
 
 -- Geometry for the active layout. Not a hot path (load / setting change only).
-function Bar:ApplyLayout(cfg)
+function Bar:ApplyLayout(cfg, bh)
     self.width = cfg.width
-    self.control:SetDimensions(cfg.width, BAR_HEIGHT)
+    self.control:SetDimensions(cfg.width, bh)
+    for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex, self.shieldTex }) do
+        tex:SetHeight(bh)
+    end
+
+    -- Diamond caps scale with the bar.
+    local capOff = zo_round(bh * 0.3)
+    self.capL:SetDimensions(bh, bh)
+    self.capR:SetDimensions(bh, bh)
+    self.capL:ClearAnchors()
+    self.capL:SetAnchor(CENTER, self.control, LEFT, -capOff, 0)
+    self.capR:ClearAnchors()
+    self.capR:SetAnchor(CENTER, self.control, RIGHT, capOff, 0)
+    local inner = zo_round(bh * 0.45)
+    self.capLInner:SetDimensions(inner, inner)
+    self.capRInner:SetDimensions(inner, inner)
 
     local point = ANCHOR_POINT[cfg.grow]
     for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex }) do
@@ -305,16 +338,6 @@ function Bar:ApplyLayout(cfg)
 
     self.spikeL:SetHidden(cfg.spikeL == false)
     self.spikeR:SetHidden(cfg.spikeR == false)
-
-    local label = self.valueLabel
-    label:ClearAnchors()
-    if cfg.label == "bottom" then
-        label:SetAnchor(TOP, self.control, BOTTOM, 0, 4)
-    elseif cfg.label == "right" then
-        label:SetAnchor(LEFT, self.control, RIGHT, LABEL_OFFSET_SIDE, 0)
-    else
-        label:SetAnchor(BOTTOM, self.control, TOP, 0, -4)
-    end
 
     -- Widths changed: drop the caches and redraw once.
     ZO_ClearTable(self.px)
@@ -366,9 +389,8 @@ function Bar:SetValue(cur, max, instant)
         end
     end
 
-    if RB.sv.showNumbers then
-        self.valueLabel:SetText(zo_strformat("<<1>> / <<2>>", ZO_CommaDelimitNumber(cur), ZO_CommaDelimitNumber(max)))
-    end
+    local mode = RB.sv.text
+    if mode ~= TEXT_NONE then self:SetText(FormatText(mode, cur, max)) end
 
     self:UpdateLow()
     if instant then self:Render() end
@@ -464,11 +486,17 @@ function Bar:Refresh(instant)
     self:SetValue(cur, effectiveMax, instant)
 end
 
-function Bar:SetNumbersVisible(visible)
-    self.valueLabel:SetHidden(not visible)
-    if visible then
-        self.valueLabel:SetText(zo_strformat("<<1>> / <<2>>", ZO_CommaDelimitNumber(self.cur), ZO_CommaDelimitNumber(self.max)))
+function Bar:SetText(text)
+    if text ~= self.text then
+        self.text = text
+        self.valueLabel:SetText(text)
     end
+end
+
+function Bar:ApplyTextMode(mode)
+    local visible = mode ~= TEXT_NONE
+    self.valueLabel:SetHidden(not visible)
+    if visible then self:SetText(FormatText(mode, self.cur, self.max)) end
 end
 
 -- Module ---------------------------------------------------------------------
@@ -477,6 +505,12 @@ function RB:Initialize(sv)
     self.inCombat = IsUnitInCombat("player")
     self.unlocked = false
     if type(self.sv.points) ~= "table" then self.sv.points = {} end
+    -- 0.3 and older: showNumbers boolean -> text mode.
+    if self.sv.showNumbers ~= nil then
+        self.sv.text = self.sv.showNumbers and TEXT_VALUE or TEXT_NONE
+        self.sv.showNumbers = nil
+    end
+    if not TEXT_VALID[self.sv.text] then self.sv.text = TEXT_NONE end
 
     local tl = AetherUI_Bars
     self.topLevel = tl
@@ -490,6 +524,13 @@ function RB:Initialize(sv)
     self.bars[POWERTYPE_MAGICKA] = magicka
     self.bars[POWERTYPE_STAMINA] = stamina
     self.health = health
+
+    tl:SetHandler("OnMouseDown", function(_, button)
+        if button == MOUSE_BUTTON_INDEX_LEFT then self:BeginGroupDrag() end
+    end)
+    tl:SetHandler("OnMouseUp", function(_, button)
+        if button == MOUSE_BUTTON_INDEX_LEFT then self:EndDrag() end
+    end)
 
     for _, bar in pairs(self.bars) do
         local c = bar.control
@@ -512,7 +553,7 @@ function RB:Initialize(sv)
     HUD_UI_SCENE:AddFragment(fragment)
 
     self:RegisterEvents()
-    self:ApplyNumbers()
+    self:ApplyText()
     self:RefreshAll(true)
 end
 
@@ -590,17 +631,19 @@ end
 
 -- Layout / visibility (used by the settings panel and slash commands) ---------
 RB.LAYOUT_ORDER = LAYOUT_ORDER
+RB.TEXT_ORDER = TEXT_ORDER
 
 function RB:ApplyLayout()
     local layout = LAYOUTS[self.sv.layout] or LAYOUTS.default
     local tl = self.topLevel
     local h, m, s = self.bars[H], self.bars[M], self.bars[S]
+    local bh = self.sv.text == TEXT_NONE and BAR_HEIGHT_SLIM or BAR_HEIGHT_TEXT
     for powerType, bar in pairs(self.bars) do
         bar.control:ClearAnchors()
-        bar:ApplyLayout(layout.bars[powerType])
+        bar:ApplyLayout(layout.bars[powerType], bh)
     end
-    layout.Anchor(tl, h.control, m.control, s.control)
-    tl:SetDimensions(layout.width, layout.height)
+    layout.Anchor(tl, h.control, m.control, s.control, bh)
+    tl:SetDimensions(layout.Size(bh))
 
     -- Default layout: bars the player has moved sit at their own saved spot.
     if layout.separate then
@@ -636,9 +679,15 @@ function RB:SetAlwaysShow(always)
     self:WakeAll()
 end
 
-function RB:SetNumbers(show)
-    self.sv.showNumbers = show
-    self:ApplyNumbers()
+function RB:SetTextMode(mode)
+    if not TEXT_VALID[mode] then return false end
+    local old = self.sv.text
+    if old == mode then return true end
+    self.sv.text = mode
+    -- Height only changes when text is switched on or off.
+    if (old == TEXT_NONE) ~= (mode == TEXT_NONE) then self:ApplyLayout() end
+    self:ApplyText()
+    return true
 end
 
 -- Keep the bars visible on top of the settings menu so changes are seen live.
@@ -679,52 +728,65 @@ function RB:ResetPosition()
     self:ApplyLayout()
 end
 
--- Group drag (non-default layouts): native movable top-level.
-function RB:OnMoveStop()
-    local x, y = self.topLevel:GetCenter()
-    self.sv.point = { x = x, y = y }
-end
+-- Dragging ---------------------------------------------------------------------
+-- One code path for both modes, driven by GetUIMousePosition and anchored to
+-- GuiRoot TOPLEFT. (The native movable top-level was dropped: it kept the
+-- group's original anchor to ZO_PlayerAttribute and its screen clamp, which
+-- pinned the group to the screen bottom while dragging.)
+--   default layout : drag target is one bar, saved to sv.points[key]
+--   other layouts  : drag target is the whole top-level, saved to sv.point
+-- The poll runs only while the mouse button is held and skips frames where the
+-- cursor has not moved.
+local drag = { control = nil, padX = 0, padY = 0, key = nil, dx = 0, dy = 0, mx = 0, my = 0 }
 
--- Per-bar drag (default layout). The poll runs only while a bar is held and
--- skips work when the cursor has not moved.
-local dragBar, dragDX, dragDY, dragMX, dragMY
-
-local function MoveDraggedBar(force)
+local function MoveDragged(force)
     local mx, my = GetUIMousePosition()
-    if not force and mx == dragMX and my == dragMY then return end
-    dragMX, dragMY = mx, my
+    if not force and mx == drag.mx and my == drag.my then return end
+    drag.mx, drag.my = mx, my
 
-    local c = dragBar.control
+    local c = drag.control
     local sw, sh = GuiRoot:GetDimensions()
-    local hw, hh = c:GetWidth() / 2 + DRAG_PAD_X, c:GetHeight() / 2 + DRAG_PAD_Y
-    local x = zo_clamp(mx + dragDX, hw, sw - hw)
-    local y = zo_clamp(my + dragDY, hh, sh - hh)
+    local hw, hh = c:GetWidth() / 2 + drag.padX, c:GetHeight() / 2 + drag.padY
+    local x = zo_clamp(mx + drag.dx, hw, sw - hw)
+    local y = zo_clamp(my + drag.dy, hh, sh - hh)
     c:ClearAnchors()
     c:SetAnchor(CENTER, GuiRoot, TOPLEFT, x, y)
     return x, y
 end
 
 local function OnDragUpdate()
-    MoveDraggedBar(false)
+    MoveDragged(false)
 end
 
-function RB:BeginDrag(bar)
-    if not (self.unlocked and self:IsSeparateLayout()) or dragBar then return end
-    dragBar = bar
-    local cx, cy = bar.control:GetCenter()
+local function StartDrag(control, padX, padY, key)
+    local cx, cy = control:GetCenter()
     local mx, my = GetUIMousePosition()
-    dragDX, dragDY = cx - mx, cy - my
-    dragMX, dragMY = mx, my
+    drag.control, drag.padX, drag.padY, drag.key = control, padX, padY, key
+    drag.dx, drag.dy, drag.mx, drag.my = cx - mx, cy - my, mx, my
     EM:RegisterForUpdate(DRAG_NAME, 0, OnDragUpdate)
 end
 
+function RB:BeginDrag(bar)
+    if drag.control or not (self.unlocked and self:IsSeparateLayout()) then return end
+    StartDrag(bar.control, DRAG_PAD_X, DRAG_PAD_Y, bar.style.key)
+end
+
+function RB:BeginGroupDrag()
+    if drag.control or not self.unlocked or self:IsSeparateLayout() then return end
+    StartDrag(self.topLevel, 0, 0, nil)
+end
+
 function RB:EndDrag()
-    if not dragBar then return end
+    if not drag.control then return end
     EM:UnregisterForUpdate(DRAG_NAME)
-    local bar = dragBar
-    local x, y = MoveDraggedBar(true)
-    dragBar = nil
-    self.sv.points[bar.style.key] = { x = x, y = y }
+    local x, y = MoveDragged(true)
+    local key = drag.key
+    drag.control, drag.key = nil, nil
+    if key then
+        self.sv.points[key] = { x = x, y = y }
+    else
+        self.sv.point = { x = x, y = y }
+    end
 end
 
 -- Switch mouse handling between per-bar and group dragging.
@@ -736,7 +798,6 @@ function RB:ApplyDragMode()
 
     local tl = self.topLevel
     tl:SetMouseEnabled(group)
-    tl:SetMovable(group)
     tl:GetNamedChild("DragOverlay"):SetHidden(not group)
     tl:GetNamedChild("DragLabel"):SetHidden(not group)
 
@@ -754,8 +815,9 @@ function RB:SetUnlocked(unlocked)
     self:WakeAll()
 end
 
-function RB:ApplyNumbers()
-    for _, bar in pairs(self.bars) do bar:SetNumbersVisible(self.sv.showNumbers) end
+function RB:ApplyText()
+    local mode = self.sv.text
+    for _, bar in pairs(self.bars) do bar:ApplyTextMode(mode) end
 end
 
 function RB:HandleCommand(cmd, rest)
@@ -773,8 +835,14 @@ function RB:HandleCommand(cmd, rest)
         self:ResetPosition()
         AUI:Print("bar position reset.")
     elseif cmd == "numbers" then
-        self:SetNumbers(not self.sv.showNumbers)
-        AUI:Print("numbers " .. (self.sv.showNumbers and "on" or "off"))
+        self:SetTextMode(self.sv.text == TEXT_NONE and TEXT_VALUE or TEXT_NONE)
+        AUI:Print("text: " .. self.sv.text)
+    elseif cmd == "text" then
+        if self:SetTextMode(rest) then
+            AUI:Print("text: " .. rest)
+        else
+            AUI:Print("text modes: " .. table.concat(TEXT_ORDER, " | "))
+        end
     elseif cmd == "always" then
         self:SetAlwaysShow(not self.sv.alwaysShow)
         AUI:Print("always show " .. (self.sv.alwaysShow and "on" or "off"))
