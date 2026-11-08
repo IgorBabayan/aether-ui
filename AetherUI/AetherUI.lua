@@ -4,13 +4,14 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.1.0"
+AUI.version = "0.2.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
 local DEFAULTS = {
     bars = {
         alwaysShow = false,  -- Skyrim behaviour: hide bars when full and out of combat
+        layout = "default",  -- "default" | "pyramid" | "columns"
         showNumbers = false, -- Skyrim shows no numbers by default
         point = nil,         -- { x, y } center of the bar group; nil = default ESO position
     },
@@ -35,7 +36,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether unlock | lock | reset | numbers | always")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | numbers | always | layout <default|pyramid|columns>")
 end
 
 local function OnAddOnLoaded(_, addonName)

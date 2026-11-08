@@ -27,9 +27,9 @@ local mexp, mmin, mmax = math.exp, math.min, math.max
 local NAME = "AetherUI_ResourceBars"
 
 -- Layout ---------------------------------------------------------------------
-local BAR_WIDTH = 300
 local BAR_HEIGHT = 11
-local BAR_GAP = 64           -- room for caps + spikes between bars
+local BAR_GAP = 64           -- room for caps + spikes between bars (default layout)
+local FRAME_PAD = 70         -- caps + spikes overhang (both ends) for the drag frame
 
 -- Motion tuning --------------------------------------------------------------
 local FILL_RATE_DOWN = 18    -- exponential approach rates (1/s)
@@ -81,6 +81,68 @@ local STYLES = {
 }
 
 local ANCHOR_POINT = { center = CENTER, left = LEFT, right = RIGHT }
+
+-- Layouts ----------------------------------------------------------------------
+-- Each layout gives per-bar geometry and an Anchor() that places the three bar
+-- controls inside the top-level. Applied only on load / when the setting
+-- changes, so layouts cost nothing per frame.
+--   width  : bar length in px
+--   grow   : edge the fill is pinned to (see STYLES)
+--   label  : where the value text sits ("top" | "bottom" | "right")
+--   spikeL / spikeR : false hides that decorative spike
+local H, M, S = POWERTYPE_HEALTH, POWERTYPE_MAGICKA, POWERTYPE_STAMINA
+
+local PYR_HP_W, PYR_GAP, PYR_ROW = 360, 30, 14
+local PYR_SIDE_W = (PYR_HP_W - PYR_GAP) / 2
+local COL_W, COL_ROW = 300, 12
+
+local LAYOUTS = {
+    -- Skyrim: Magicka | Health | Stamina in one row.
+    default = {
+        bars = {
+            [H] = { width = 300, grow = "center", label = "top" },
+            [M] = { width = 300, grow = "right", label = "top" },
+            [S] = { width = 300, grow = "left", label = "top" },
+        },
+        width = 300 * 3 + BAR_GAP * 2 + FRAME_PAD, height = 44,
+        Anchor = function(tl, h, m, s)
+            h:SetAnchor(CENTER, tl, CENTER, 0, 0)
+            m:SetAnchor(RIGHT, h, LEFT, -BAR_GAP, 0)
+            s:SetAnchor(LEFT, h, RIGHT, BAR_GAP, 0)
+        end,
+    },
+    -- Bandits UI style: wide Health on top, Magicka + Stamina side by side under it.
+    pyramid = {
+        bars = {
+            [H] = { width = PYR_HP_W, grow = "center", label = "top" },
+            [M] = { width = PYR_SIDE_W, grow = "right", label = "bottom", spikeR = false },
+            [S] = { width = PYR_SIDE_W, grow = "left", label = "bottom", spikeL = false },
+        },
+        width = PYR_HP_W + FRAME_PAD, height = BAR_HEIGHT * 2 + PYR_ROW + 44,
+        Anchor = function(tl, h, m, s)
+            h:SetAnchor(CENTER, tl, CENTER, 0, -(BAR_HEIGHT + PYR_ROW) / 2)
+            m:SetAnchor(TOPLEFT, h, BOTTOMLEFT, 0, PYR_ROW)
+            s:SetAnchor(TOPRIGHT, h, BOTTOMRIGHT, 0, PYR_ROW)
+        end,
+    },
+    -- LUI style: Health / Magicka / Stamina stacked in one column, filled from the left.
+    columns = {
+        bars = {
+            [H] = { width = COL_W, grow = "left", label = "right" },
+            [M] = { width = COL_W, grow = "left", label = "right" },
+            [S] = { width = COL_W, grow = "left", label = "right" },
+        },
+        width = COL_W + FRAME_PAD, height = BAR_HEIGHT * 3 + COL_ROW * 2 + 20,
+        Anchor = function(tl, h, m, s)
+            h:SetAnchor(CENTER, tl, CENTER, 0, -(BAR_HEIGHT + COL_ROW))
+            m:SetAnchor(TOP, h, BOTTOM, 0, COL_ROW)
+            s:SetAnchor(TOP, m, BOTTOM, 0, COL_ROW)
+        end,
+    },
+}
+local LAYOUT_ORDER = { "default", "pyramid", "columns" }
+
+local LABEL_OFFSET_SIDE = 34 -- clears cap + spike
 
 local function SetGradient(tex, top, bottom)
     tex:SetColor(1, 1, 1, 1)
@@ -169,13 +231,10 @@ function Bar:Initialize(parent, powerType, style)
     self.track, self.fillTex, self.trailTex, self.gainTex = child("Track"), child("Fill"), child("Trail"), child("Gain")
     self.shieldTex, self.flashTex, self.glowTex, self.alertTex = child("Shield"), child("Flash"), child("Glow"), child("Alert")
     self.valueLabel = child("Value")
+    self.spikeL, self.spikeR = child("SpikeL"), child("SpikeR")
+    self.width = 0
 
-    c:SetDimensions(BAR_WIDTH, BAR_HEIGHT)
-
-    local point = ANCHOR_POINT[style.grow]
     for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex }) do
-        tex:ClearAnchors()
-        tex:SetAnchor(point, self.track, point, 0, 0)
         tex:SetHeight(BAR_HEIGHT)
     end
     self.shieldTex:SetHeight(BAR_HEIGHT)
@@ -195,8 +254,8 @@ function Bar:Initialize(parent, powerType, style)
         MakeDiamond(cap)
         MakeDiamond(child(n .. "Inner"))
     end
-    SetHorizontalFade(child("SpikeL"), FRAME.spike, true)
-    SetHorizontalFade(child("SpikeR"), FRAME.spike, false)
+    SetHorizontalFade(self.spikeL, FRAME.spike, true)
+    SetHorizontalFade(self.spikeR, FRAME.spike, false)
 
     -- Native timelines
     self.lowAnim = ANIMATION_MANAGER:CreateTimelineFromVirtual("AetherUI_LowPulseAnim", self.glowTex)
@@ -216,6 +275,36 @@ function Bar:Initialize(parent, powerType, style)
     self.hidden = {}   -- cached hidden flags per texture
 end
 
+-- Geometry for the active layout. Not a hot path (load / setting change only).
+function Bar:ApplyLayout(cfg)
+    self.width = cfg.width
+    self.control:SetDimensions(cfg.width, BAR_HEIGHT)
+
+    local point = ANCHOR_POINT[cfg.grow]
+    for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex }) do
+        tex:ClearAnchors()
+        tex:SetAnchor(point, self.track, point, 0, 0)
+    end
+
+    self.spikeL:SetHidden(cfg.spikeL == false)
+    self.spikeR:SetHidden(cfg.spikeR == false)
+
+    local label = self.valueLabel
+    label:ClearAnchors()
+    if cfg.label == "bottom" then
+        label:SetAnchor(TOP, self.control, BOTTOM, 0, 4)
+    elseif cfg.label == "right" then
+        label:SetAnchor(LEFT, self.control, RIGHT, LABEL_OFFSET_SIDE, 0)
+    else
+        label:SetAnchor(BOTTOM, self.control, TOP, 0, -4)
+    end
+
+    -- Widths changed: drop the caches and redraw once.
+    ZO_ClearTable(self.px)
+    ZO_ClearTable(self.hidden)
+    self:Render()
+end
+
 function Bar:SetWidthCached(tex, px)
     local visible = px >= 0.5
     if self.hidden[tex] ~= not visible then
@@ -232,7 +321,7 @@ function Bar:SetWidthCached(tex, px)
 end
 
 function Bar:Render()
-    local w, fill, target = BAR_WIDTH, self.fill, self.target
+    local w, fill, target = self.width, self.fill, self.target
     self:SetWidthCached(self.fillTex, fill * w)
     self:SetWidthCached(self.trailTex, self.trail > fill and self.trail * w or 0)
     self:SetWidthCached(self.gainTex, target > fill and target * w or 0)
@@ -299,7 +388,7 @@ function Bar:Alert()
 end
 
 function Bar:ShouldShow()
-    return RB.unlocked or RB.sv.alwaysShow or RB.inCombat
+    return RB.unlocked or RB.preview or RB.sv.alwaysShow or RB.inCombat
         or self.target < 0.999 or self.shieldTarget > 0
         or self.alertAnim:IsPlaying()
 end
@@ -378,20 +467,19 @@ function RB:Initialize(sv)
     local health = Bar:New(tl, POWERTYPE_HEALTH, STYLES[POWERTYPE_HEALTH])
     local magicka = Bar:New(tl, POWERTYPE_MAGICKA, STYLES[POWERTYPE_MAGICKA])
     local stamina = Bar:New(tl, POWERTYPE_STAMINA, STYLES[POWERTYPE_STAMINA])
-    health.control:SetAnchor(CENTER, tl, CENTER, 0, 0)
-    magicka.control:SetAnchor(RIGHT, health.control, LEFT, -BAR_GAP, 0)
-    stamina.control:SetAnchor(LEFT, health.control, RIGHT, BAR_GAP, 0)
-    tl:SetDimensions(BAR_WIDTH * 3 + BAR_GAP * 2 + 70, 44)
 
     self.bars[POWERTYPE_HEALTH] = health
     self.bars[POWERTYPE_MAGICKA] = magicka
     self.bars[POWERTYPE_STAMINA] = stamina
     self.health = health
 
+    if not LAYOUTS[self.sv.layout] then self.sv.layout = "default" end
+    self:ApplyLayout()
     self:ApplyPosition()
     self:HideDefaultBars()
 
     local fragment = ZO_HUDFadeSceneFragment:New(tl)
+    self.fragment = fragment
     HUD_SCENE:AddFragment(fragment)
     HUD_UI_SCENE:AddFragment(fragment)
 
@@ -472,6 +560,56 @@ function RB:RegisterEvents()
     end
 end
 
+-- Layout / visibility (used by the settings panel and slash commands) ---------
+RB.LAYOUT_ORDER = LAYOUT_ORDER
+
+function RB:ApplyLayout()
+    local layout = LAYOUTS[self.sv.layout] or LAYOUTS.default
+    local tl = self.topLevel
+    local h, m, s = self.bars[H], self.bars[M], self.bars[S]
+    for powerType, bar in pairs(self.bars) do
+        bar.control:ClearAnchors()
+        bar:ApplyLayout(layout.bars[powerType])
+    end
+    layout.Anchor(tl, h.control, m.control, s.control)
+    tl:SetDimensions(layout.width, layout.height)
+end
+
+function RB:SetLayout(name)
+    if not LAYOUTS[name] then return false end
+    if self.sv.layout ~= name then
+        self.sv.layout = name
+        self:ApplyLayout()
+    end
+    return true
+end
+
+function RB:SetAlwaysShow(always)
+    self.sv.alwaysShow = always
+    self:WakeAll()
+end
+
+function RB:SetNumbers(show)
+    self.sv.showNumbers = show
+    self:ApplyNumbers()
+end
+
+-- Keep the bars visible on top of the settings menu so changes are seen live.
+function RB:SetPreview(enabled)
+    if self.preview == enabled then return end
+    self.preview = enabled
+    local tl = self.topLevel
+    if enabled then
+        self.savedDrawTier = tl:GetDrawTier()
+        tl:SetDrawTier(DT_HIGH)
+        GAME_MENU_SCENE:AddFragment(self.fragment)
+    else
+        GAME_MENU_SCENE:RemoveFragment(self.fragment)
+        tl:SetDrawTier(self.savedDrawTier or DT_LOW)
+    end
+    self:WakeAll()
+end
+
 -- Position / settings ----------------------------------------------------------
 function RB:ApplyPosition()
     local tl = self.topLevel
@@ -505,7 +643,7 @@ function RB:ApplyNumbers()
     for _, bar in pairs(self.bars) do bar:SetNumbersVisible(self.sv.showNumbers) end
 end
 
-function RB:HandleCommand(cmd)
+function RB:HandleCommand(cmd, rest)
     if cmd == "unlock" then
         self:SetUnlocked(true)
         AUI:Print("bars unlocked. Drag them, then /aether lock")
@@ -517,13 +655,17 @@ function RB:HandleCommand(cmd)
         self:ApplyPosition()
         AUI:Print("bar position reset.")
     elseif cmd == "numbers" then
-        self.sv.showNumbers = not self.sv.showNumbers
-        self:ApplyNumbers()
+        self:SetNumbers(not self.sv.showNumbers)
         AUI:Print("numbers " .. (self.sv.showNumbers and "on" or "off"))
     elseif cmd == "always" then
-        self.sv.alwaysShow = not self.sv.alwaysShow
-        self:WakeAll()
+        self:SetAlwaysShow(not self.sv.alwaysShow)
         AUI:Print("always show " .. (self.sv.alwaysShow and "on" or "off"))
+    elseif cmd == "layout" then
+        if self:SetLayout(rest) then
+            AUI:Print("layout: " .. rest)
+        else
+            AUI:Print("layouts: " .. table.concat(LAYOUT_ORDER, " | "))
+        end
     else
         return false
     end
