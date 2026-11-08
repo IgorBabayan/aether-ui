@@ -92,7 +92,7 @@ function Settings:Initialize(sv)
             choicesTooltips = layoutTips,
             getFunc = function() return bars.layout end,
             setFunc = function(value) RB:SetLayout(value) end,
-            default = "default",
+            default = "columns",
         },
         {
             type = "dropdown",
@@ -103,7 +103,7 @@ function Settings:Initialize(sv)
             choicesTooltips = textTips,
             getFunc = function() return bars.text end,
             setFunc = function(value) RB:SetTextMode(value) end,
-            default = "none",
+            default = "both",
         },
         {
             type = "slider",
@@ -137,7 +137,7 @@ function Settings:Initialize(sv)
         {
             type = "button",
             name = "Reset position",
-            tooltip = "Move the bars back to the default ESO position.",
+            tooltip = "Move the bars back to their default position.\nColumns layout: same spot as the LUI player frame.",
             func = function() RB:ResetPosition() end,
             width = "half",
         },

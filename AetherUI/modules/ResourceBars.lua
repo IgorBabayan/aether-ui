@@ -43,7 +43,8 @@ local DRAG_NAME = NAME .. "Drag"
 -- bar length; layouts derive their own widths from it. Height is the bar
 -- thickness; bars never get thinner than BAR_HEIGHT_TEXT while text is shown.
 local WIDTH_MIN, WIDTH_MAX, WIDTH_DEFAULT = 150, 600, 300
-local HEIGHT_MIN, HEIGHT_MAX, HEIGHT_DEFAULT = 6, 40, 11
+local HEIGHT_MIN, HEIGHT_MAX, HEIGHT_DEFAULT = 6, 40, 20
+local SPIKE_BASE_HEIGHT = 11 -- bar height the cap/spike art was tuned for
 local BAR_HEIGHT_TEXT = 18
 local DRAG_PAD_Y = 10        -- vertical grab area around a bar
 
@@ -52,7 +53,7 @@ local DRAG_PAD_Y = 10        -- vertical grab area around a bar
 -- At the default 11 px height: offset 6 + spike 22 = 28 (gap 64, frame pad 70).
 local function SpikeGeometry(bh)
     local off = zo_round(bh * 0.55)
-    local len = 22 + mmax(0, zo_round((bh - HEIGHT_DEFAULT) * 0.8))
+    local len = 22 + mmax(0, zo_round((bh - SPIKE_BASE_HEIGHT) * 0.8))
     return off, len
 end
 
@@ -118,6 +119,26 @@ local H, M, S = POWERTYPE_HEALTH, POWERTYPE_MAGICKA, POWERTYPE_STAMINA
 local PYR_HP_SCALE, PYR_GAP, PYR_ROW = 1.2, 30, 14 -- pyramid health bar = 1.2 x base width
 local COL_ROW = 12
 
+-- LUI (LuiExtended) default spot for its stacked player frame: the frame's
+-- top-left corner sits at (-492, 205) from screen centre on a 1080p canvas.
+-- Scaled for other resolutions / aspect ratios the same way LUI does it
+-- (ultrawide and multi-monitor capped at ~21:9).
+local LUI_X, LUI_Y = -492, 205
+local LUI_MAX_ASPECT, BASE_ASPECT = 2.45, 16 / 9
+
+local function LuiOffset()
+    local sw, sh = GuiRoot:GetDimensions()
+    if sw == 0 or sh == 0 then sw, sh = 1920, 1080 end
+    local aspect = sw / sh
+    local wScale, hScale = sw / 1920, sh / 1080
+    local aScale = aspect / BASE_ASPECT
+    if aspect > LUI_MAX_ASPECT then
+        aScale = LUI_MAX_ASPECT / BASE_ASPECT
+        wScale = hScale * aScale
+    end
+    return LUI_X * wScale, LUI_Y * (hScale ^ 1.2) * aScale
+end
+
 -- separate = true: bars can be dragged one by one (each anchored to the
 -- top-level on its own, so moving one never drags the others along).
 -- Widths(w)  -> health, magicka, stamina widths for base width w
@@ -174,6 +195,12 @@ local LAYOUTS = {
             h:SetAnchor(CENTER, tl, CENTER, 0, -(bh + COL_ROW))
             m:SetAnchor(TOP, h, BOTTOM, 0, COL_ROW)
             s:SetAnchor(TOP, m, BOTTOM, 0, COL_ROW)
+        end,
+        -- Unmoved position: Health bar's top-left on LUI's player frame corner.
+        -- Health centre = group centre - (bh + COL_ROW), see Anchor above.
+        DefaultAnchor = function(tl, g)
+            local x, y = LuiOffset()
+            tl:SetAnchor(CENTER, GuiRoot, CENTER, x + g.hw / 2, y + g.bh * 1.5 + COL_ROW)
         end,
     },
 }
@@ -580,7 +607,7 @@ function RB:Initialize(sv)
         end)
     end
 
-    if not LAYOUTS[self.sv.layout] then self.sv.layout = "default" end
+    if not LAYOUTS[self.sv.layout] then self.sv.layout = "columns" end
     self:ApplyLayout()
     self:ApplyPosition()
     self:HideDefaultBars()
@@ -699,6 +726,10 @@ function RB:ApplyLayout()
     end
     layout.Anchor(tl, h.control, m.control, s.control, geo)
     tl:SetDimensions(layout.Size(geo))
+    self.layoutCfg = layout
+
+    -- The unmoved group's default spot depends on layout and bar size.
+    if not self.sv.point then self:ApplyPosition() end
 
     -- Default layout: bars the player has moved sit at their own saved spot.
     if layout.separate then
@@ -796,8 +827,11 @@ function RB:ApplyPosition()
     local tl = self.topLevel
     tl:ClearAnchors()
     local p = self.sv.point
+    local layout = self.layoutCfg
     if p then
         tl:SetAnchor(CENTER, GuiRoot, TOPLEFT, p.x, p.y)
+    elseif layout and layout.DefaultAnchor then
+        layout.DefaultAnchor(tl, geo)
     elseif ZO_PlayerAttribute then
         tl:SetAnchor(CENTER, ZO_PlayerAttribute, CENTER, 0, 0)
     else
@@ -809,8 +843,7 @@ function RB:ResetPosition()
     self:EndDrag()
     self.sv.point = nil
     ZO_ClearTable(self.sv.points)
-    self:ApplyPosition()
-    self:ApplyLayout()
+    self:ApplyLayout() -- also re-applies the default position
 end
 
 -- Dragging ---------------------------------------------------------------------

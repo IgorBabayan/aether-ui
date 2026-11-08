@@ -4,18 +4,18 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.5.0"
+AUI.version = "0.6.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
 local DEFAULTS = {
     bars = {
         alwaysShow = false,  -- Skyrim behaviour: hide bars when full and out of combat
-        layout = "default",  -- "default" | "pyramid" | "columns"
-        text = "none",       -- bar text: "none" | "value" | "percent" | "both" (Skyrim: none)
+        layout = "columns",  -- "default" | "pyramid" | "columns"
+        text = "both",       -- bar text: "none" | "value" | "percent" | "both"
         width = 300,         -- base bar length in px (150-600); layouts scale from it
-        height = 11,         -- bar thickness in px (6-40); at least 18 while text is shown
-        point = nil,         -- { x, y } center of the bar group; nil = default ESO position
+        height = 20,         -- bar thickness in px (6-40); at least 18 while text is shown
+        point = nil,         -- { x, y } center of the bar group; nil = layout default (columns: LUI spot)
         points = {},         -- default layout only: per-bar { x, y } centers keyed by bar ("Health", ...)
     },
 }
