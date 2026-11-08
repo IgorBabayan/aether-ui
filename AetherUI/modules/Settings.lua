@@ -105,6 +105,24 @@ function Settings:Initialize(sv)
             setFunc = function(value) RB:SetTextMode(value) end,
             default = "none",
         },
+        {
+            type = "slider",
+            name = "Bar width",
+            tooltip = "Length of the bars in pixels.\nPyramid layout: Health is 20% wider, Magicka and Stamina share its width.",
+            min = RB.WIDTH_MIN, max = RB.WIDTH_MAX, step = 5,
+            getFunc = function() return bars.width end,
+            setFunc = function(value) RB:SetBarWidth(value) end,
+            default = RB.WIDTH_DEFAULT,
+        },
+        {
+            type = "slider",
+            name = "Bar height",
+            tooltip = "Thickness of the bars in pixels.\nWhile bar text is shown, bars are at least 18 px tall.",
+            min = RB.HEIGHT_MIN, max = RB.HEIGHT_MAX, step = 1,
+            getFunc = function() return bars.height end,
+            setFunc = function(value) RB:SetBarHeight(value) end,
+            default = RB.HEIGHT_DEFAULT,
+        },
 
         { type = "header", name = "Position" },
         {

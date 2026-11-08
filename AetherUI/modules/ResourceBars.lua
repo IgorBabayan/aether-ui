@@ -39,12 +39,22 @@ local NAME = "AetherUI_ResourceBars"
 local DRAG_NAME = NAME .. "Drag"
 
 -- Layout ---------------------------------------------------------------------
--- Slim Skyrim bars without text; taller bars when text is drawn inside.
-local BAR_HEIGHT_SLIM = 11
+-- Bar size is user-configurable (settings / slash commands). Width is the base
+-- bar length; layouts derive their own widths from it. Height is the bar
+-- thickness; bars never get thinner than BAR_HEIGHT_TEXT while text is shown.
+local WIDTH_MIN, WIDTH_MAX, WIDTH_DEFAULT = 150, 600, 300
+local HEIGHT_MIN, HEIGHT_MAX, HEIGHT_DEFAULT = 6, 40, 11
 local BAR_HEIGHT_TEXT = 18
-local BAR_GAP = 64           -- room for caps + spikes between bars (default layout)
-local FRAME_PAD = 70         -- caps + spikes overhang (both ends) for the drag frame
-local DRAG_PAD_X, DRAG_PAD_Y = 34, 10 -- grab area around a bar (caps + spikes)
+local DRAG_PAD_Y = 10        -- vertical grab area around a bar
+
+-- Caps + spikes overhang one bar end by this much; everything that has to
+-- clear them (gap between bars, drag frame, grab area) is derived from it.
+-- At the default 11 px height: offset 6 + spike 22 = 28 (gap 64, frame pad 70).
+local function SpikeGeometry(bh)
+    local off = zo_round(bh * 0.55)
+    local len = 22 + mmax(0, zo_round((bh - HEIGHT_DEFAULT) * 0.8))
+    return off, len
+end
 
 -- Motion tuning --------------------------------------------------------------
 local FILL_RATE_DOWN = 18    -- exponential approach rates (1/s)
@@ -101,47 +111,51 @@ local ANCHOR_POINT = { center = CENTER, left = LEFT, right = RIGHT }
 -- Each layout gives per-bar geometry and an Anchor() that places the three bar
 -- controls inside the top-level. Applied only on load / when the setting
 -- changes, so layouts cost nothing per frame.
---   width  : bar length in px
 --   grow   : edge the fill is pinned to (see STYLES)
 --   spikeL / spikeR : false hides that decorative spike
 local H, M, S = POWERTYPE_HEALTH, POWERTYPE_MAGICKA, POWERTYPE_STAMINA
 
-local PYR_HP_W, PYR_GAP, PYR_ROW = 360, 30, 14
-local PYR_SIDE_W = (PYR_HP_W - PYR_GAP) / 2
-local COL_W, COL_ROW = 300, 12
-
-local DEF_W = 300
-local DEF_SIDE_OFFSET = DEF_W / 2 + BAR_GAP
+local PYR_HP_SCALE, PYR_GAP, PYR_ROW = 1.2, 30, 14 -- pyramid health bar = 1.2 x base width
+local COL_ROW = 12
 
 -- separate = true: bars can be dragged one by one (each anchored to the
 -- top-level on its own, so moving one never drags the others along).
--- Size(bh) and Anchor(..., bh) take the current bar height.
+-- Widths(w)  -> health, magicka, stamina widths for base width w
+-- Size(g)    -> top-level size;  Anchor(tl, h, m, s, g) -> place the bars
+-- g = { bh = bar height, hw = health width, gap = space between bars, pad = frame pad }
 local LAYOUTS = {
     -- Skyrim: Magicka | Health | Stamina in one row.
     default = {
         separate = true,
         bars = {
-            [H] = { width = DEF_W, grow = "center" },
-            [M] = { width = DEF_W, grow = "right" },
-            [S] = { width = DEF_W, grow = "left" },
+            [H] = { grow = "center" },
+            [M] = { grow = "right" },
+            [S] = { grow = "left" },
         },
-        Size = function(bh) return DEF_W * 3 + BAR_GAP * 2 + FRAME_PAD, bh + 33 end,
-        Anchor = function(tl, h, m, s)
+        Widths = function(w) return w, w, w end,
+        Size = function(g) return g.hw * 3 + g.gap * 2 + g.pad, g.bh + 33 end,
+        Anchor = function(tl, h, m, s, g)
+            local off = g.hw / 2 + g.gap
             h:SetAnchor(CENTER, tl, CENTER, 0, 0)
-            m:SetAnchor(RIGHT, tl, CENTER, -DEF_SIDE_OFFSET, 0)
-            s:SetAnchor(LEFT, tl, CENTER, DEF_SIDE_OFFSET, 0)
+            m:SetAnchor(RIGHT, tl, CENTER, -off, 0)
+            s:SetAnchor(LEFT, tl, CENTER, off, 0)
         end,
     },
     -- Bandits UI style: wide Health on top, Magicka + Stamina side by side under it.
     pyramid = {
         bars = {
-            [H] = { width = PYR_HP_W, grow = "center" },
-            [M] = { width = PYR_SIDE_W, grow = "right", spikeR = false },
-            [S] = { width = PYR_SIDE_W, grow = "left", spikeL = false },
+            [H] = { grow = "center" },
+            [M] = { grow = "right", spikeR = false },
+            [S] = { grow = "left", spikeL = false },
         },
-        Size = function(bh) return PYR_HP_W + FRAME_PAD, bh * 2 + PYR_ROW + 22 end,
-        Anchor = function(tl, h, m, s, bh)
-            h:SetAnchor(CENTER, tl, CENTER, 0, -(bh + PYR_ROW) / 2)
+        Widths = function(w)
+            local hw = zo_round(w * PYR_HP_SCALE)
+            local side = (hw - PYR_GAP) / 2
+            return hw, side, side
+        end,
+        Size = function(g) return g.hw + g.pad, g.bh * 2 + PYR_ROW + 22 end,
+        Anchor = function(tl, h, m, s, g)
+            h:SetAnchor(CENTER, tl, CENTER, 0, -(g.bh + PYR_ROW) / 2)
             m:SetAnchor(TOPLEFT, h, BOTTOMLEFT, 0, PYR_ROW)
             s:SetAnchor(TOPRIGHT, h, BOTTOMRIGHT, 0, PYR_ROW)
         end,
@@ -149,12 +163,14 @@ local LAYOUTS = {
     -- LUI style: Health / Magicka / Stamina stacked in one column, filled from the left.
     columns = {
         bars = {
-            [H] = { width = COL_W, grow = "left" },
-            [M] = { width = COL_W, grow = "left" },
-            [S] = { width = COL_W, grow = "left" },
+            [H] = { grow = "left" },
+            [M] = { grow = "left" },
+            [S] = { grow = "left" },
         },
-        Size = function(bh) return COL_W + FRAME_PAD, bh * 3 + COL_ROW * 2 + 20 end,
-        Anchor = function(tl, h, m, s, bh)
+        Widths = function(w) return w, w, w end,
+        Size = function(g) return g.hw + g.pad, g.bh * 3 + COL_ROW * 2 + 20 end,
+        Anchor = function(tl, h, m, s, g)
+            local bh = g.bh
             h:SetAnchor(CENTER, tl, CENTER, 0, -(bh + COL_ROW))
             m:SetAnchor(TOP, h, BOTTOM, 0, COL_ROW)
             s:SetAnchor(TOP, m, BOTTOM, 0, COL_ROW)
@@ -267,11 +283,12 @@ function Bar:Initialize(parent, powerType, style)
     self.valueLabel = child("Value")
     self.spikeL, self.spikeR = child("SpikeL"), child("SpikeR")
     self.capL, self.capR = child("CapL"), child("CapR")
+    self.shine = child("Shine")
     self.capLInner, self.capRInner = child("CapLInner"), child("CapRInner")
     self.text = nil    -- last string handed to the label
     self.dragOverlay, self.dragLabel = child("DragOverlay"), child("DragLabel")
     self.dragLabel:SetText(style.key)
-    c:SetHitInsets(-DRAG_PAD_X, -DRAG_PAD_Y, DRAG_PAD_X, DRAG_PAD_Y)
+    self.dragPadX = 0  -- set by ApplyLayout (depends on bar height)
     self.width = 0
 
     -- Look
@@ -311,12 +328,14 @@ function Bar:Initialize(parent, powerType, style)
 end
 
 -- Geometry for the active layout. Not a hot path (load / setting change only).
-function Bar:ApplyLayout(cfg, bh)
-    self.width = cfg.width
-    self.control:SetDimensions(cfg.width, bh)
+function Bar:ApplyLayout(cfg, width, bh)
+    local c = self.control
+    self.width = width
+    c:SetDimensions(width, bh)
     for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex, self.shieldTex }) do
         tex:SetHeight(bh)
     end
+    self.shine:SetHeight(mmax(2, zo_round(bh * 0.35)))
 
     -- Diamond caps scale with the bar.
     local capOff = zo_round(bh * 0.3)
@@ -329,6 +348,23 @@ function Bar:ApplyLayout(cfg, bh)
     local inner = zo_round(bh * 0.45)
     self.capLInner:SetDimensions(inner, inner)
     self.capRInner:SetDimensions(inner, inner)
+
+    -- Spikes move out past the bigger caps; grab area follows them.
+    local spikeOff, spikeLen = SpikeGeometry(bh)
+    self.spikeL:SetDimensions(spikeLen, 1)
+    self.spikeL:ClearAnchors()
+    self.spikeL:SetAnchor(RIGHT, c, LEFT, -spikeOff, 0)
+    self.spikeR:SetDimensions(spikeLen, 1)
+    self.spikeR:ClearAnchors()
+    self.spikeR:SetAnchor(LEFT, c, RIGHT, spikeOff, 0)
+
+    local padX = spikeOff + spikeLen + 6
+    self.dragPadX = padX
+    c:SetHitInsets(-padX, -DRAG_PAD_Y, padX, DRAG_PAD_Y)
+    local overlay = self.dragOverlay
+    overlay:ClearAnchors()
+    overlay:SetAnchor(TOPLEFT, c, TOPLEFT, -padX, -DRAG_PAD_Y)
+    overlay:SetAnchor(BOTTOMRIGHT, c, BOTTOMRIGHT, padX, DRAG_PAD_Y)
 
     local point = ANCHOR_POINT[cfg.grow]
     for _, tex in ipairs({ self.gainTex, self.trailTex, self.fillTex }) do
@@ -511,6 +547,8 @@ function RB:Initialize(sv)
         self.sv.showNumbers = nil
     end
     if not TEXT_VALID[self.sv.text] then self.sv.text = TEXT_NONE end
+    self.sv.width = zo_clamp(zo_round(tonumber(self.sv.width) or WIDTH_DEFAULT), WIDTH_MIN, WIDTH_MAX)
+    self.sv.height = zo_clamp(zo_round(tonumber(self.sv.height) or HEIGHT_DEFAULT), HEIGHT_MIN, HEIGHT_MAX)
 
     local tl = AetherUI_Bars
     self.topLevel = tl
@@ -632,18 +670,35 @@ end
 -- Layout / visibility (used by the settings panel and slash commands) ---------
 RB.LAYOUT_ORDER = LAYOUT_ORDER
 RB.TEXT_ORDER = TEXT_ORDER
+RB.WIDTH_MIN, RB.WIDTH_MAX, RB.WIDTH_DEFAULT = WIDTH_MIN, WIDTH_MAX, WIDTH_DEFAULT
+RB.HEIGHT_MIN, RB.HEIGHT_MAX, RB.HEIGHT_DEFAULT = HEIGHT_MIN, HEIGHT_MAX, HEIGHT_DEFAULT
+
+-- Effective bar height: the configured height, but tall enough for text.
+function RB:GetBarHeight()
+    local bh = self.sv.height
+    if self.sv.text ~= TEXT_NONE and bh < BAR_HEIGHT_TEXT then bh = BAR_HEIGHT_TEXT end
+    return bh
+end
+
+local geo = { bh = 0, hw = 0, gap = 0, pad = 0 } -- reused, no garbage per relayout
 
 function RB:ApplyLayout()
     local layout = LAYOUTS[self.sv.layout] or LAYOUTS.default
     local tl = self.topLevel
     local h, m, s = self.bars[H], self.bars[M], self.bars[S]
-    local bh = self.sv.text == TEXT_NONE and BAR_HEIGHT_SLIM or BAR_HEIGHT_TEXT
+    local bh = self:GetBarHeight()
+    local hw, mw, sw = layout.Widths(self.sv.width)
+    local spikeOff, spikeLen = SpikeGeometry(bh)
+    local overhang = spikeOff + spikeLen
+    geo.bh, geo.hw, geo.gap, geo.pad = bh, hw, overhang * 2 + 8, overhang * 2 + 14
+
+    local widths = { [H] = hw, [M] = mw, [S] = sw }
     for powerType, bar in pairs(self.bars) do
         bar.control:ClearAnchors()
-        bar:ApplyLayout(layout.bars[powerType], bh)
+        bar:ApplyLayout(layout.bars[powerType], widths[powerType], bh)
     end
-    layout.Anchor(tl, h.control, m.control, s.control, bh)
-    tl:SetDimensions(layout.Size(bh))
+    layout.Anchor(tl, h.control, m.control, s.control, geo)
+    tl:SetDimensions(layout.Size(geo))
 
     -- Default layout: bars the player has moved sit at their own saved spot.
     if layout.separate then
@@ -683,11 +738,41 @@ function RB:SetTextMode(mode)
     if not TEXT_VALID[mode] then return false end
     local old = self.sv.text
     if old == mode then return true end
+    local oldHeight = self:GetBarHeight()
     self.sv.text = mode
-    -- Height only changes when text is switched on or off.
-    if (old == TEXT_NONE) ~= (mode == TEXT_NONE) then self:ApplyLayout() end
+    -- Relayout only if the effective height changed (text on/off on a thin bar).
+    if self:GetBarHeight() ~= oldHeight then self:ApplyLayout() end
     self:ApplyText()
     return true
+end
+
+-- Bar size. Values are clamped; nothing happens when the value is unchanged.
+-- Returns the applied value, or nil for non-numeric input.
+function RB:SetBarWidth(width)
+    width = tonumber(width)
+    if not width then return nil end
+    width = zo_clamp(zo_round(width), WIDTH_MIN, WIDTH_MAX)
+    if self.sv.width ~= width then
+        self:EndDrag()
+        self.sv.width = width
+        self:ApplyLayout()
+    end
+    return width
+end
+
+function RB:SetBarHeight(height)
+    height = tonumber(height)
+    if not height then return nil end
+    height = zo_clamp(zo_round(height), HEIGHT_MIN, HEIGHT_MAX)
+    if self.sv.height ~= height then
+        local oldHeight = self:GetBarHeight()
+        self.sv.height = height
+        if self:GetBarHeight() ~= oldHeight then
+            self:EndDrag()
+            self:ApplyLayout()
+        end
+    end
+    return height
 end
 
 -- Keep the bars visible on top of the settings menu so changes are seen live.
@@ -768,7 +853,7 @@ end
 
 function RB:BeginDrag(bar)
     if drag.control or not (self.unlocked and self:IsSeparateLayout()) then return end
-    StartDrag(bar.control, DRAG_PAD_X, DRAG_PAD_Y, bar.style.key)
+    StartDrag(bar.control, bar.dragPadX, DRAG_PAD_Y, bar.style.key)
 end
 
 function RB:BeginGroupDrag()
@@ -846,6 +931,20 @@ function RB:HandleCommand(cmd, rest)
     elseif cmd == "always" then
         self:SetAlwaysShow(not self.sv.alwaysShow)
         AUI:Print("always show " .. (self.sv.alwaysShow and "on" or "off"))
+    elseif cmd == "width" then
+        local w = self:SetBarWidth(rest)
+        if w then
+            AUI:Print("bar width: " .. w)
+        else
+            AUI:Print(sfmt("bar width: %d (%d-%d)", self.sv.width, WIDTH_MIN, WIDTH_MAX))
+        end
+    elseif cmd == "height" then
+        local h = self:SetBarHeight(rest)
+        if h then
+            AUI:Print("bar height: " .. h)
+        else
+            AUI:Print(sfmt("bar height: %d (%d-%d)", self.sv.height, HEIGHT_MIN, HEIGHT_MAX))
+        end
     elseif cmd == "layout" then
         if self:SetLayout(rest) then
             AUI:Print("layout: " .. rest)

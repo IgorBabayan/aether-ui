@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.4.0"
+AUI.version = "0.5.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -13,6 +13,8 @@ local DEFAULTS = {
         alwaysShow = false,  -- Skyrim behaviour: hide bars when full and out of combat
         layout = "default",  -- "default" | "pyramid" | "columns"
         text = "none",       -- bar text: "none" | "value" | "percent" | "both" (Skyrim: none)
+        width = 300,         -- base bar length in px (150-600); layouts scale from it
+        height = 11,         -- bar thickness in px (6-40); at least 18 while text is shown
         point = nil,         -- { x, y } center of the bar group; nil = default ESO position
         points = {},         -- default layout only: per-bar { x, y } centers keyed by bar ("Health", ...)
     },
@@ -59,7 +61,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40>")
 end
 
 local function OnAddOnLoaded(_, addonName)
