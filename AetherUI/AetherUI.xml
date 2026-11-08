@@ -1,0 +1,129 @@
+<GuiXml>
+    <Animations>
+        <!-- Slow breathing glow while a resource is low (Skyrim "running out" flash). -->
+        <AnimationTimeline name="AetherUI_LowPulseAnim" playbackType="PING_PONG" loopCount="LOOP_INDEFINITELY">
+            <Animations>
+                <AlphaAnimation duration="560" startAlpha="0.05" endAlpha="0.45">
+                    <EasingFunction>return ZO_EaseInOutQuadratic(progress)</EasingFunction>
+                </AlphaAnimation>
+            </Animations>
+        </AnimationTimeline>
+
+        <!-- Three quick blinks when an ability fails for lack of resource. -->
+        <AnimationTimeline name="AetherUI_AlertBlinkAnim" playbackType="PING_PONG" loopCount="6">
+            <Animations>
+                <AlphaAnimation duration="110" startAlpha="0" endAlpha="1" />
+            </Animations>
+        </AnimationTimeline>
+
+        <!-- Short white flash over the fill when damage lands. -->
+        <AnimationTimeline name="AetherUI_HitFlashAnim">
+            <Animations>
+                <AlphaAnimation duration="320" startAlpha="0.55" endAlpha="0">
+                    <EasingFunction>return ZO_EaseOutQuadratic(progress)</EasingFunction>
+                </AlphaAnimation>
+            </Animations>
+        </AnimationTimeline>
+    </Animations>
+
+    <Controls>
+        <!--
+            One resource bar. All pieces are untextured quads tinted from Lua
+            (vertex-colour gradients), so the addon ships no .dds assets.
+            Draw order is set with "level".
+        -->
+        <Control name="AetherUI_ResourceBar" virtual="true">
+            <Dimensions x="300" y="11" />
+            <Controls>
+                <Texture name="$(parent)Glow" alpha="0" hidden="true" level="1">
+                    <Anchor point="TOPLEFT" offsetX="-7" offsetY="-6" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="7" offsetY="6" />
+                </Texture>
+                <Texture name="$(parent)Alert" alpha="0" hidden="true" level="2">
+                    <Anchor point="TOPLEFT" offsetX="-5" offsetY="-4" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="5" offsetY="4" />
+                </Texture>
+
+                <!-- Frame: black rim, bronze bevel, dark gap, recessed track. -->
+                <Texture name="$(parent)Rim" color="050403" alpha="0.92" level="3">
+                    <Anchor point="TOPLEFT" offsetX="-3" offsetY="-3" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="3" offsetY="3" />
+                </Texture>
+                <Texture name="$(parent)Bevel" level="4">
+                    <Anchor point="TOPLEFT" offsetX="-2" offsetY="-2" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="2" offsetY="2" />
+                </Texture>
+                <Texture name="$(parent)Gap" color="0A0806" level="5">
+                    <Anchor point="TOPLEFT" offsetX="-1" offsetY="-1" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="1" offsetY="1" />
+                </Texture>
+                <Texture name="$(parent)Track" level="6">
+                    <AnchorFill />
+                </Texture>
+
+                <!-- Value layers (anchored from Lua according to drain direction). -->
+                <Texture name="$(parent)Gain" level="7" hidden="true" />
+                <Texture name="$(parent)Trail" level="8" hidden="true" />
+                <Texture name="$(parent)Fill" level="9" />
+                <Texture name="$(parent)Shine" color="FFFFFF" alpha="0.16" level="10">
+                    <Anchor point="TOPLEFT" relativeTo="$(parent)Fill" relativePoint="TOPLEFT" offsetY="1" />
+                    <Anchor point="TOPRIGHT" relativeTo="$(parent)Fill" relativePoint="TOPRIGHT" offsetY="1" />
+                    <Dimensions y="4" />
+                </Texture>
+                <Texture name="$(parent)Shield" level="11" hidden="true">
+                    <Anchor point="CENTER" relativeTo="$(parent)Track" relativePoint="CENTER" />
+                    <Dimensions x="0" y="11" />
+                </Texture>
+                <Texture name="$(parent)Flash" color="FFFFFF" alpha="0" level="12">
+                    <AnchorFill relativeTo="$(parent)Fill" />
+                </Texture>
+
+                <!-- Nordic-style diamond end caps with tapering spikes. -->
+                <Texture name="$(parent)SpikeL" level="13">
+                    <Anchor point="RIGHT" relativePoint="LEFT" offsetX="-6" />
+                    <Dimensions x="22" y="1" />
+                </Texture>
+                <Texture name="$(parent)SpikeR" level="13">
+                    <Anchor point="LEFT" relativePoint="RIGHT" offsetX="6" />
+                    <Dimensions x="22" y="1" />
+                </Texture>
+                <Texture name="$(parent)CapL" level="14">
+                    <Anchor point="CENTER" relativePoint="LEFT" offsetX="-3" />
+                    <Dimensions x="11" y="11" />
+                </Texture>
+                <Texture name="$(parent)CapR" level="14">
+                    <Anchor point="CENTER" relativePoint="RIGHT" offsetX="3" />
+                    <Dimensions x="11" y="11" />
+                </Texture>
+                <Texture name="$(parent)CapLInner" color="120E0A" level="15">
+                    <Anchor point="CENTER" relativeTo="$(parent)CapL" />
+                    <Dimensions x="5" y="5" />
+                </Texture>
+                <Texture name="$(parent)CapRInner" color="120E0A" level="15">
+                    <Anchor point="CENTER" relativeTo="$(parent)CapR" />
+                    <Dimensions x="5" y="5" />
+                </Texture>
+
+                <Label name="$(parent)Value" font="ZoFontGameSmall" color="E8DCC0" horizontalAlignment="CENTER" hidden="true" level="16">
+                    <Anchor point="BOTTOM" relativePoint="TOP" offsetY="-4" />
+                </Label>
+            </Controls>
+        </Control>
+
+        <TopLevelControl name="AetherUI_Bars" hidden="true" clampedToScreen="true" mouseEnabled="false" movable="false">
+            <Dimensions x="1080" y="44" />
+            <OnMoveStop>
+                AetherUI.ResourceBars:OnMoveStop()
+            </OnMoveStop>
+            <Controls>
+                <Texture name="$(parent)DragOverlay" color="C8A464" alpha="0.18" hidden="true">
+                    <AnchorFill />
+                </Texture>
+                <Label name="$(parent)DragLabel" font="ZoFontGameSmall" color="E8DCC0" hidden="true"
+                       text="AetherUI: drag to move, then /aether lock">
+                    <Anchor point="BOTTOM" relativePoint="TOP" offsetY="-6" />
+                </Label>
+            </Controls>
+        </TopLevelControl>
+    </Controls>
+</GuiXml>
