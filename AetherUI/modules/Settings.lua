@@ -81,7 +81,7 @@ function Settings:Initialize(sv)
             choicesValues = { VISIBILITY_AUTO, VISIBILITY_ALWAYS },
             getFunc = function() return bars.alwaysShow and VISIBILITY_ALWAYS or VISIBILITY_AUTO end,
             setFunc = function(value) RB:SetAlwaysShow(value == VISIBILITY_ALWAYS) end,
-            default = VISIBILITY_AUTO,
+            default = VISIBILITY_ALWAYS,
         },
         {
             type = "dropdown",

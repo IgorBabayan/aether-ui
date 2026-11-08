@@ -4,13 +4,13 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.6.0"
+AUI.version = "0.6.1"
 AUI.modules = {}
 
 local SV_VERSION = 1
 local DEFAULTS = {
     bars = {
-        alwaysShow = false,  -- Skyrim behaviour: hide bars when full and out of combat
+        alwaysShow = true,   -- bars always visible (false = Skyrim auto-hide when full and out of combat)
         layout = "columns",  -- "default" | "pyramid" | "columns"
         text = "both",       -- bar text: "none" | "value" | "percent" | "both"
         width = 300,         -- base bar length in px (150-600); layouts scale from it

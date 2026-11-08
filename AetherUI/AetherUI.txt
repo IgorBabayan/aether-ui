@@ -1,7 +1,7 @@
 ## Title: |cC8A464Aether|rUI
 ## Author: IgorBabayan
-## Version: 0.6.0
-## AddOnVersion: 6
+## Version: 0.6.1
+## AddOnVersion: 7
 ## APIVersion: 101047 101048
 ## SavedVariables: AetherUI_SV
 ## OptionalDependsOn: LibAddonMenu-2.0>=32
