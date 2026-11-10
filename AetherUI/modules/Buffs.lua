@@ -5,8 +5,8 @@
 -- Player buffs:
 --   columns : under the Stamina bar, left to right, next row below
 --   pyramid : under the Magicka + Stamina row, left to right, next row below
---             (columns / pyramid: under the companion bar while it is shown
---             at its default spot under the player bars)
+--             (pyramid: under the companion bar while it is shown at its
+--             default spot under the player bars)
 --   default : screen bottom-left corner, bottom to top,
 --             next column to the right
 -- Player debuffs:

@@ -3,12 +3,16 @@
 -- screen) while enabled. Companion name on the left inside the bar, health
 -- text on the right (bar text setting).
 --
--- Default spot: centred on the player bars, as wide as the Health bar.
---   * columns : under the Stamina bar; buff icons move down under it
+-- Default spot, as wide as the Health bar:
+--   * columns : level with the Magicka bar (same centre Y), on the outer
+--               (left) side of the column, clear of both bars' caps and
+--               spikes. Narrowed to fit the screen edge if needed (down to
+--               MIN_WIDTH); only below that does it move to the right side.
 --   * pyramid : under the Magicka + Stamina row; buff icons move down under it
 --   * default : above the Health bar (follows Health when it is dragged)
--- The spot is native anchoring to the player bars, so it follows them when
--- they are dragged, resized or change layout, at no cost.
+-- The spot is native anchoring to the player bars, so it follows them while
+-- they are dragged; side / width are picked again only when the player bars
+-- are dropped, resized or change layout, never per frame.
 -- Drag and drop (unlock mode): the bar moves on its own and keeps its spot
 -- until Reset position. A dragged bar no longer pushes the buff icons.
 --
@@ -36,6 +40,9 @@ local NAME = "AetherUI_Companion"
 local HIDE_REASON = "AetherUI"
 
 local ROW_GAP = 12           -- space between the player bars and this bar
+local SIDE_GAP = 8           -- columns: space between Magicka's spikes and ours
+local SCREEN_MARGIN = 8
+local MIN_WIDTH = 140        -- columns: narrowest bar before switching side
 local TEXT_PAD = 6           -- name / value inset from the bar ends
 local NAME_VALUE_GAP = 8
 local DRAG_PAD_Y = 10
@@ -44,8 +51,10 @@ local PLACEHOLDER = "Companion"
 
 local H, M, S = POWERTYPE_HEALTH, POWERTYPE_MAGICKA, POWERTYPE_STAMINA
 -- Layouts where the bar hangs under the stack: the bar its top-left corner
--- attaches to (same left edge and width as Health in both layouts).
-local BELOW = { columns = S, pyramid = M }
+-- attaches to (same left edge and width as Health).
+local BELOW = { pyramid = M }
+-- Layouts where the bar sits beside the stack, level with this bar.
+local BESIDE = { columns = M }
 local BAR_CFG_ROW = { grow = "center" } -- default layout: Skyrim style
 local BAR_CFG_COL = { grow = "left" }
 
@@ -144,12 +153,37 @@ function Companion:ApplyLayout()
     if not self.ready then return end
     local RB = AUI.ResourceBars
     local health = RB.health
-    local w = health and health.width or RB.sv.width
     local bh = RB:GetBarHeight()
     if bh < RB.BAR_HEIGHT_TEXT then bh = RB.BAR_HEIGHT_TEXT end
-    self.bar:ApplyLayout(RB.sv.layout == "default" and BAR_CFG_ROW or BAR_CFG_COL, w, bh)
-    self.topLevel:SetDimensions(w, bh)
+    self.baseWidth = health and health.width or RB.sv.width
+    self.barHeight = bh
+    self.cfg = RB.sv.layout == "default" and BAR_CFG_ROW or BAR_CFG_COL
+    self.width = nil -- forces the bar to be laid out by ApplyPosition
     self:ApplyPosition()
+end
+
+-- Bar geometry, only when the width actually changes.
+function Companion:SetWidth(w)
+    if w == self.width then return end
+    self.width = w
+    self.bar:ApplyLayout(self.cfg, w, self.barHeight)
+    self.topLevel:SetDimensions(w, self.barHeight)
+end
+
+-- Columns: beside Magicka, left side first. Returns side point, width.
+function Companion:PickSide(anchor)
+    local RB = AUI.ResourceBars
+    local own = RB.Overhang(self.barHeight)
+    local gap = RB.Overhang(RB:GetBarHeight()) + own + SIDE_GAP
+    local w = self.baseWidth
+    local left, right = anchor:GetLeft(), anchor:GetRight()
+    if not (left and right) then return LEFT, w, gap end
+    local room = left - gap - own - SCREEN_MARGIN
+    if room >= w then return LEFT, w, gap end
+    if room >= MIN_WIDTH then return LEFT, zo_round(room), gap end
+    room = GuiRoot:GetWidth() - SCREEN_MARGIN - own - right - gap
+    if room < w then w = zo_round(zo_max(room, MIN_WIDTH)) end
+    return RIGHT, w, gap
 end
 
 function Companion:ApplyText()
@@ -173,11 +207,24 @@ function Companion:ApplyPosition()
     tl:ClearAnchors()
     local p = self.sv.point
     local below = false
+    local RB = AUI.ResourceBars
+    local layout = RB.sv.layout
     if p then
+        self:SetWidth(self.baseWidth)
         tl:SetAnchor(CENTER, GuiRoot, TOPLEFT, p.x, p.y)
+    elseif BESIDE[layout] then
+        local anchor = RB.bars[BESIDE[layout]].control
+        local side, w, gap = self:PickSide(anchor)
+        self:SetWidth(w)
+        -- RIGHT <-> LEFT anchoring lines up the vertical centres.
+        if side == LEFT then
+            tl:SetAnchor(RIGHT, anchor, LEFT, -gap, 0)
+        else
+            tl:SetAnchor(LEFT, anchor, RIGHT, gap, 0)
+        end
     else
-        local RB = AUI.ResourceBars
-        local under = BELOW[RB.sv.layout]
+        self:SetWidth(self.baseWidth)
+        local under = BELOW[layout]
         if under then
             tl:SetAnchor(TOPLEFT, RB.bars[under].control, BOTTOMLEFT, 0, ROW_GAP)
             below = true
@@ -202,6 +249,11 @@ function Companion:UpdateBuffAnchor()
         self.buffAnchor = anchor
         if AUI.Effects then AUI.Effects:ApplyPlacement() end
     end
+end
+
+-- Player bars dropped after a drag: an unmoved bar re-picks its side / width.
+function Companion:FollowPlayer()
+    if self.ready and not self.sv.point then self:ApplyPosition() end
 end
 
 function Companion:ResetPosition()

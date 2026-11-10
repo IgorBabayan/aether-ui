@@ -247,8 +247,9 @@ function Settings:Initialize(sv)
         {
             type = "checkbox",
             name = "Show companion bar",
-            tooltip = "Health bar for your companion, centred on your bars and as wide as the Health bar.\n"
-                .. "Columns / Pyramid: under the player bars; your buffs move down under it.\n"
+            tooltip = "Health bar for your companion, as wide as the Health bar.\n"
+                .. "Columns: level with the Magicka bar, on the outer (left) side of your bars.\n"
+                .. "Pyramid: under the player bars; your buffs move down under it.\n"
                 .. "Default layout: above the Health bar.\n"
                 .. "Companion name on the left, its health on the right. Replaces ESO's companion frame.\n"
                 .. "Drag it anywhere while the bars are unlocked.\n"
@@ -279,7 +280,7 @@ function Settings:Initialize(sv)
                 .. "Columns layout: same spot as the LUI player frame.\n"
                 .. "Target bar: level with your Health bar, mirrored across the screen centre.\n"
                 .. "Mini-boss bars: beside the target bar.\n"
-                .. "Companion bar: centred on your bars.",
+                .. "Companion bar: beside Magicka (Columns), under your bars (Pyramid), above Health (Default).",
             func = function() RB:ResetPosition() end,
             width = "half",
         },

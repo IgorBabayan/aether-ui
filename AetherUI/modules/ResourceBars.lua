@@ -727,6 +727,7 @@ end
 -- The player bars moved or changed size: bars that line up with them follow.
 function RB:NotifyMoved()
     if AUI.Target then AUI.Target:FollowPlayer() end
+    if AUI.Companion then AUI.Companion:FollowPlayer() end
 end
 
 -- Layout / visibility (used by the settings panel and slash commands) ---------
