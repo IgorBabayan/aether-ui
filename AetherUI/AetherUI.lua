@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.7.0"
+AUI.version = "0.8.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -20,6 +20,10 @@ local DEFAULTS = {
     },
     buffs = {
         enabled = true,      -- show the player buff icons
+        perRow = 8,          -- icons per row (1-20); default layout: icons per column, bottom -> top
+    },
+    debuffs = {
+        enabled = true,      -- show the player debuff icons
         perRow = 8,          -- icons per row (1-20); default layout: icons per column, bottom -> top
     },
 }
@@ -65,7 +69,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20>")
 end
 
 local function OnAddOnLoaded(_, addonName)

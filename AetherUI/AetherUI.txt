@@ -1,11 +1,11 @@
 ## Title: |cC8A464Aether|rUI
 ## Author: IgorBabayan
-## Version: 0.7.0
-## AddOnVersion: 8
+## Version: 0.8.0
+## AddOnVersion: 9
 ## APIVersion: 101047 101048
 ## SavedVariables: AetherUI_SV
 ## OptionalDependsOn: LibAddonMenu-2.0>=32
-## Description: A clean, immersive interface. Skyrim (RFAD) styled player resource bars and buffs.
+## Description: A clean, immersive interface. Skyrim (RFAD) styled player resource bars, buffs and debuffs.
 
 AetherUI.lua
 AetherUI.xml

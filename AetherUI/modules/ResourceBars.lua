@@ -743,8 +743,8 @@ function RB:ApplyLayout()
         end
     end
 
-    -- Buff icons follow the layout (no-op until the Buffs module is ready).
-    if AUI.Buffs then AUI.Buffs:ApplyPlacement() end
+    -- Buff / debuff icons follow the layout (no-op until the module is ready).
+    if AUI.Effects then AUI.Effects:ApplyPlacement() end
 end
 
 function RB:IsSeparateLayout()

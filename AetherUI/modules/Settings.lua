@@ -46,6 +46,7 @@ function Settings:Initialize(sv)
 
     local RB = AUI.ResourceBars
     local Buffs = AUI.Buffs
+    local Debuffs = AUI.Debuffs
     local bars = sv.bars
 
     local layoutValues, layoutNames, layoutTips = {}, {}, {}
@@ -138,14 +139,36 @@ function Settings:Initialize(sv)
             type = "slider",
             name = "Buffs per row",
             tooltip = "How many buff icons fit in one row before a new row starts.\n"
-                .. "Columns: under Stamina, left to right.\n"
-                .. "Pyramid: under Magicka and Stamina, left to right.\n"
+                .. "Columns: under Stamina, left to right, new rows below.\n"
+                .. "Pyramid: under Magicka and Stamina, left to right, new rows below.\n"
                 .. "Default: screen bottom-left corner, bottom to top (a row is one column of icons).",
             min = Buffs.PER_ROW_MIN, max = Buffs.PER_ROW_MAX, step = 1,
             getFunc = function() return sv.buffs.perRow end,
             setFunc = function(value) Buffs:SetPerRow(value) end,
             disabled = function() return not sv.buffs.enabled end,
             default = Buffs.PER_ROW_DEFAULT,
+        },
+
+        { type = "header", name = "Debuffs" },
+        {
+            type = "checkbox",
+            name = "Show debuffs",
+            tooltip = "Show your active debuffs as icons with a red frame.\nPermanent debuffs come first, then temporary ones with a timer under the icon.",
+            getFunc = function() return sv.debuffs.enabled end,
+            setFunc = function(value) Debuffs:SetEnabled(value) end,
+            default = true,
+        },
+        {
+            type = "slider",
+            name = "Debuffs per row",
+            tooltip = "How many debuff icons fit in one row before a new row starts.\n"
+                .. "Columns and Pyramid: above Health, left to right, new rows above.\n"
+                .. "Default: screen bottom-right corner, bottom to top (a row is one column of icons, new columns to the left).",
+            min = Debuffs.PER_ROW_MIN, max = Debuffs.PER_ROW_MAX, step = 1,
+            getFunc = function() return sv.debuffs.perRow end,
+            setFunc = function(value) Debuffs:SetPerRow(value) end,
+            disabled = function() return not sv.debuffs.enabled end,
+            default = Debuffs.PER_ROW_DEFAULT,
         },
 
         { type = "header", name = "Position" },

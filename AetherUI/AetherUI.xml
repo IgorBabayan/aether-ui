@@ -120,7 +120,7 @@
             </Controls>
         </Control>
 
-        <!-- One buff icon (Buffs module). Bronze frame matching the bars. -->
+        <!-- One buff / debuff icon (Buffs module). Frame colors are set in Lua. -->
         <Control name="AetherUI_BuffIcon" virtual="true" hidden="true">
             <Dimensions x="32" y="32" />
             <Controls>
