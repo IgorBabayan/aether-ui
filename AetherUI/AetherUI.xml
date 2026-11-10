@@ -136,9 +136,10 @@
                     <AnchorFill />
                     <TextureCoords left="0.06" right="0.94" top="0.06" bottom="0.94" />
                 </Texture>
-                <Label name="$(parent)Time" font="$(BOLD_FONT)|13|soft-shadow-thick" color="F4ECD8"
+                <!-- Countdown under the icon (temporary buffs only). -->
+                <Label name="$(parent)Time" font="$(BOLD_FONT)|12|soft-shadow-thick" color="F4ECD8"
                        horizontalAlignment="CENTER" level="4">
-                    <Anchor point="BOTTOM" offsetY="1" />
+                    <Anchor point="TOP" relativePoint="BOTTOM" offsetY="2" />
                 </Label>
                 <Label name="$(parent)Stack" font="$(BOLD_FONT)|12|soft-shadow-thick" color="E8C878"
                        horizontalAlignment="RIGHT" level="4">

@@ -6,7 +6,9 @@
 --             wrapping into a new column to the right
 -- "Buffs per row" sets how many icons fit in one line before wrapping.
 --
--- Order: timed buffs first (soonest to expire first), then permanent ones.
+-- Order: permanent buffs first, then timed ones (soonest to expire first).
+-- Every icon has a timer slot under it; temporary buffs show their countdown
+-- there. The slot is always reserved, so rows never shift as buffs come and go.
 --
 -- Performance:
 --   * one event (EVENT_EFFECT_CHANGED) filtered natively to the player
@@ -37,7 +39,9 @@ local TIMER_NAME = NAME .. "Timer"
 
 local ICON_SIZE = 32
 local ICON_GAP = 4
-local STEP = ICON_SIZE + ICON_GAP
+local TIME_H = 14            -- timer text slot under each icon
+local STEP_X = ICON_SIZE + ICON_GAP
+local STEP_Y = ICON_SIZE + TIME_H + ICON_GAP
 local BAR_GAP = 8            -- space between the bars and the first buff row
 local SCREEN_MARGIN = 12     -- default layout: distance from the screen corner
 local MAX_ICONS = 60         -- hard cap, protects against unusual buff floods
@@ -61,9 +65,9 @@ local function FormatTime(sec)
     return sfmt("%d", mceil(sec))
 end
 
--- Sort: timed before permanent; timed by end time; then by ability id (stable).
+-- Sort: permanent before timed; timed by end time; then by ability id (stable).
 local function CompareEntries(a, b)
-    if a.timed ~= b.timed then return a.timed end
+    if a.timed ~= b.timed then return b.timed end
     if a.timed and a.ending ~= b.ending then return a.ending < b.ending end
     return a.abilityId < b.abilityId
 end
@@ -95,6 +99,7 @@ function Buffs:CreateIcon(index)
 end
 
 -- Slot -> position. Line = one row of "per row" icons along the flow.
+-- A slot is the icon plus its timer text underneath.
 function Buffs:AnchorIcon(icon)
     local i = icon.index - 1
     local perRow = self.sv.perRow
@@ -102,9 +107,9 @@ function Buffs:AnchorIcon(icon)
     local c = icon.control
     c:ClearAnchors()
     if self.flow == FLOW_UP then
-        c:SetAnchor(BOTTOMLEFT, self.container, BOTTOMLEFT, line * STEP, -pos * STEP)
+        c:SetAnchor(BOTTOMLEFT, self.container, BOTTOMLEFT, line * STEP_X, -TIME_H - pos * STEP_Y)
     else
-        c:SetAnchor(TOPLEFT, self.container, TOPLEFT, pos * STEP, line * STEP)
+        c:SetAnchor(TOPLEFT, self.container, TOPLEFT, pos * STEP_X, line * STEP_Y)
     end
 end
 
@@ -133,7 +138,7 @@ function Buffs:Initialize(sv)
     self.entries = {}   -- reusable entry tables (no garbage per rebuild)
     self.order = {}     -- sorted references into entries
     self.shown = 0      -- icons currently visible
-    self.timed = 0      -- leading icons that have a countdown
+    self.timedFrom = 1  -- icons timedFrom..shown have a countdown (timed sort last)
     self.registered = false
 
     -- Child of the bar group: same HUD fragment, same settings preview.
@@ -189,9 +194,9 @@ function Buffs:UpdateContainerSize()
     local lines = n > 0 and mceil(n / perRow) or 0
     local w, h
     if self.flow == FLOW_UP then
-        w, h = lines * STEP, along * STEP
+        w, h = lines * STEP_X, along * STEP_Y
     else
-        w, h = along * STEP, lines * STEP
+        w, h = along * STEP_X, lines * STEP_Y
     end
     self.container:SetDimensions(w > 0 and w - ICON_GAP or 1, h > 0 and h - ICON_GAP or 1)
 end
@@ -250,7 +255,7 @@ function Buffs:Rebuild()
     if n > MAX_ICONS then n = MAX_ICONS end
 
     local now = GetFrameTimeSeconds()
-    local timed = 0
+    local timedFrom = n + 1
     for i = 1, n do
         local e = order[i]
         local icon = self.icons[i] or self:CreateIcon(i)
@@ -264,7 +269,7 @@ function Buffs:Rebuild()
             icon.stack:SetText(stackText)
         end
         if e.timed then
-            timed = i
+            if i < timedFrom then timedFrom = i end
             icon.ending = e.ending
             local rem = e.ending - now
             SetIconTime(icon, rem > 0 and FormatTime(rem) or "")
@@ -280,9 +285,9 @@ function Buffs:Rebuild()
 
     local changedCount = n ~= self.shown
     self.shown = n
-    self.timed = timed  -- timed buffs are sorted first: icons 1..timed
+    self.timedFrom = timedFrom  -- timed buffs are sorted last: icons timedFrom..n
     if changedCount then self:UpdateContainerSize() end
-    self:SetTimerRunning(timed > 0)
+    self:SetTimerRunning(timedFrom <= n)
 end
 
 function Buffs:SetTimerRunning(run)
@@ -298,7 +303,7 @@ end
 function Buffs:UpdateTimers()
     local now = GetFrameTimeSeconds()
     local icons = self.icons
-    for i = 1, self.timed do
+    for i = self.timedFrom, self.shown do
         local icon = icons[i]
         local rem = icon.ending - now
         SetIconTime(icon, rem > 0 and FormatTime(rem) or "")

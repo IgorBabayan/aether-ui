@@ -129,7 +129,7 @@ function Settings:Initialize(sv)
         {
             type = "checkbox",
             name = "Show buffs",
-            tooltip = "Show your active buffs as icons.\nTimed buffs come first, soonest to expire on the left.",
+            tooltip = "Show your active buffs as icons.\nPermanent buffs come first, then temporary ones with a timer under the icon.",
             getFunc = function() return sv.buffs.enabled end,
             setFunc = function(value) Buffs:SetEnabled(value) end,
             default = true,
