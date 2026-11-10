@@ -26,6 +26,9 @@ local DEFAULTS = {
         enabled = true,      -- show the player debuff icons
         perRow = 8,          -- icons per row (1-20); default layout: icons per column, bottom -> top
     },
+    keybinds = {
+        defaultsApplied = false, -- default keys (F12 reload, Home house) are set once, never re-applied
+    },
 }
 
 -- One fixed profile instead of ESO's default (GetWorldName()), so settings are

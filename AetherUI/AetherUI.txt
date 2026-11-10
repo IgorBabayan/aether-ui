@@ -5,10 +5,12 @@
 ## APIVersion: 101047 101048
 ## SavedVariables: AetherUI_SV
 ## OptionalDependsOn: LibAddonMenu-2.0>=32
-## Description: A clean, immersive interface. Skyrim (RFAD) styled player resource bars, buffs and debuffs.
+## Description: A clean, immersive interface. Skyrim (RFAD) styled player resource bars, buffs and debuffs, plus handy keybinds.
 
 AetherUI.lua
 AetherUI.xml
+Bindings.xml
 modules/ResourceBars.lua
 modules/Buffs.lua
 modules/Settings.lua
+modules/Keybinds.lua
