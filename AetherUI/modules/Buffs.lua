@@ -18,7 +18,10 @@
 --
 -- Drag and drop (unlock mode): every list can be dragged to its own spot.
 -- The spot is the list's first-icon corner, so rows still grow the same way.
---   player lists : saved as a screen position
+--   player lists : default layout -> saved as a screen position (sv.point)
+--                  columns / pyramid -> saved relative to the bar the list
+--                  attaches to (sv.barPoint), so the icons stick to the
+--                  player bars when the bar group is moved
 --   target lists : saved relative to the target bar, so they move with it
 -- Reset position puts every list back on its layout spot.
 --
@@ -162,6 +165,7 @@ local function NewList(o)
         shown = 0,                -- icons currently visible
         timedFrom = 1,            -- icons timedFrom..shown have a countdown (timed sort last)
         unlocked = false,
+        pointKey = "point",       -- sv field holding the dragged spot
     }, List)
 end
 
@@ -179,6 +183,7 @@ function List:Init(sv, parent, tracker, dragRelTo)
     if s.enabled == nil then s.enabled = true end
     s.perRow = zo_clamp(zo_round(tonumber(s.perRow) or PER_ROW_DEFAULT), PER_ROW_MIN, PER_ROW_MAX)
     if type(s.point) ~= "table" or not (tonumber(s.point.x) and tonumber(s.point.y)) then s.point = nil end
+    if type(s.barPoint) ~= "table" or not (tonumber(s.barPoint.x) and tonumber(s.barPoint.y)) then s.barPoint = nil end
     self.sv = s
     self.tracker = tracker
     self.dragRelTo = dragRelTo
@@ -223,6 +228,13 @@ function List:AnchorIcon(icon)
     c:SetAnchor(f.point, self.container, f.point, pos * f.ax + line * f.lx, f.by + pos * f.ay + line * f.ly)
 end
 
+-- Where a dragged spot is measured from and which sv field holds it.
+-- relTo nil = the screen. Call before Place (Place applies the anchor).
+function List:SetDragAnchor(relTo, key)
+    self.dragRelTo = relTo
+    self.pointKey = key or "point"
+end
+
 -- p = { flow, relPoint, ox, oy }; relTo = control to attach to (nil = GuiRoot).
 -- A dragged spot (sv.point) wins over p. Not a hot path: load / layout change only.
 function List:Place(p, relTo)
@@ -242,7 +254,7 @@ function List:ApplyAnchor()
     if not p then return end
     local c, point = self.container, self.flow.point
     c:ClearAnchors()
-    local spot = self.sv.point
+    local spot = self.sv[self.pointKey]
     if spot then
         c:SetAnchor(point, self.dragRelTo or GuiRoot, TOPLEFT, spot.x, spot.y)
     else
@@ -257,13 +269,14 @@ function List:SaveDragged(x, y)
     x, y = x + sign[1] * w / 2, y + sign[2] * h / 2
     local rel = self.dragRelTo
     if rel then x, y = x - rel:GetLeft(), y - rel:GetTop() end
-    self.sv.point = { x = zo_round(x), y = zo_round(y) }
+    self.sv[self.pointKey] = { x = zo_round(x), y = zo_round(y) }
     self:ApplyAnchor()
 end
 
 function List:ResetPosition()
-    if not self.sv or not self.sv.point then return end
-    self.sv.point = nil
+    local sv = self.sv
+    if not sv or not (sv.point or sv.barPoint) then return end
+    sv.point, sv.barPoint = nil, nil
     self:ApplyAnchor()
 end
 
@@ -574,12 +587,18 @@ function Effects:ApplyPlacement()
     local layout, bars = RB.sv.layout, RB.bars
     local pb = PLAYER_PLACEMENTS.buffs[layout] or PLAYER_PLACEMENTS.buffs.default
     local pd = PLAYER_PLACEMENTS.debuffs[layout] or PLAYER_PLACEMENTS.debuffs.default
-    local buffRel = pb.bar and bars[pb.bar].control
+    local buffBar = pb.bar and bars[pb.bar].control
+    local debuffBar = pd.bar and bars[pd.bar].control
+    -- Bar layouts: a dragged spot is kept relative to the bar (not the companion
+    -- bar, which comes and goes), so the icons follow the group when it moves.
+    Buffs:SetDragAnchor(buffBar, buffBar and "barPoint" or "point")
+    Debuffs:SetDragAnchor(debuffBar, debuffBar and "barPoint" or "point")
+    local buffRel = buffBar
     if buffRel and AUI.Companion then
         buffRel = AUI.Companion:GetBuffAnchor() or buffRel -- same left edge
     end
     Buffs:Place(pb, buffRel)
-    Debuffs:Place(pd, pd.bar and bars[pd.bar].control)
+    Debuffs:Place(pd, debuffBar)
 end
 
 function Effects:SetUnlocked(unlocked)
