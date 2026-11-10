@@ -10,7 +10,9 @@
 -- unit is a mini-boss. One boss alone = no bars. ESO's own boss bar under the
 -- compass is left as it is.
 --
--- Default spot: top centre of the screen, under ESO's compass boss bar.
+-- Default spot: LUI's boss frames spot. The first bar's top-left corner sits
+-- at (306, -312) from the screen centre on a 1080p canvas, scaled like the
+-- player and target bars; more mini-bosses stack downward from there.
 -- Width / height / text follow the player bar settings; bars are at least
 -- tall enough for the name.
 --
@@ -40,7 +42,7 @@ local MAX = MAX_BOSSES or 12
 local BOSS_TAGS = {}
 for i = 1, MAX do BOSS_TAGS[i] = "boss" .. i end
 
-local DEFAULT_Y = 110        -- top of the first bar from the screen top (under the compass)
+local LUI_BOSS_X, LUI_BOSS_Y = 306, -312 -- LUI boss frames top-left, 1080p
 local ROW_GAP = 8            -- space between stacked bars
 local TEXT_PAD = 6           -- name / value inset from the bar ends
 local NAME_VALUE_GAP = 8
@@ -293,7 +295,8 @@ function MiniBoss:ApplyPosition()
     if p then
         tl:SetAnchor(CENTER, GuiRoot, TOPLEFT, p.x, p.y)
     else
-        tl:SetAnchor(TOP, GuiRoot, TOP, 0, DEFAULT_Y)
+        local x, y = AUI.ResourceBars.LuiOffset(LUI_BOSS_X, LUI_BOSS_Y)
+        tl:SetAnchor(TOPLEFT, GuiRoot, CENTER, x, y)
     end
 end
 

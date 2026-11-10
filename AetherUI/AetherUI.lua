@@ -40,7 +40,7 @@ local DEFAULTS = {
     },
     miniBoss = {
         enabled = true,      -- one health bar (name + HP) per mini-boss next to the main boss
-        point = nil,         -- { x, y } centre of the first mini-boss bar; nil = top centre under the compass
+        point = nil,         -- { x, y } centre of the first mini-boss bar; nil = LUI boss frames spot
     },
     keybinds = {
         defaultsApplied = false, -- default keys (F12 reload, Home house) are set once, never re-applied

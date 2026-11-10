@@ -231,7 +231,7 @@ function Settings:Initialize(sv)
             type = "checkbox",
             name = "Show mini-boss bars",
             tooltip = "A health bar for each mini-boss a boss summons or fights alongside, "
-                .. "stacked under ESO's boss bar at the top of the screen.\n"
+                .. "stacked in the LUI boss frames spot (upper right of the screen centre).\n"
                 .. "The mini-boss name is on the left of the bar, its health on the right. No buffs or debuffs.\n"
                 .. "The main boss is the one with the most max health; it keeps ESO's own boss bar.\n"
                 .. "Uses the bar width, height and text settings above.",
@@ -256,7 +256,7 @@ function Settings:Initialize(sv)
             name = "Reset position",
             tooltip = "Move the bars back to their default position.\nColumns layout: same spot as the LUI player frame.\n"
                 .. "Target bar: same spot as the LUI target frame.\n"
-                .. "Mini-boss bars: top centre, under ESO's boss bar.",
+                .. "Mini-boss bars: same spot as the LUI boss frames.",
             func = function() RB:ResetPosition() end,
             width = "half",
         },
