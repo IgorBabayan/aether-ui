@@ -120,6 +120,33 @@
             </Controls>
         </Control>
 
+        <!-- One buff icon (Buffs module). Bronze frame matching the bars. -->
+        <Control name="AetherUI_BuffIcon" virtual="true" hidden="true">
+            <Dimensions x="32" y="32" />
+            <Controls>
+                <Texture name="$(parent)Rim" color="050403" alpha="0.92" level="1">
+                    <Anchor point="TOPLEFT" offsetX="-2" offsetY="-2" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="2" offsetY="2" />
+                </Texture>
+                <Texture name="$(parent)Bevel" level="2">
+                    <Anchor point="TOPLEFT" offsetX="-1" offsetY="-1" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="1" offsetY="1" />
+                </Texture>
+                <Texture name="$(parent)Icon" level="3">
+                    <AnchorFill />
+                    <TextureCoords left="0.06" right="0.94" top="0.06" bottom="0.94" />
+                </Texture>
+                <Label name="$(parent)Time" font="$(BOLD_FONT)|13|soft-shadow-thick" color="F4ECD8"
+                       horizontalAlignment="CENTER" level="4">
+                    <Anchor point="BOTTOM" offsetY="1" />
+                </Label>
+                <Label name="$(parent)Stack" font="$(BOLD_FONT)|12|soft-shadow-thick" color="E8C878"
+                       horizontalAlignment="RIGHT" level="4">
+                    <Anchor point="TOPRIGHT" offsetX="-1" offsetY="-1" />
+                </Label>
+            </Controls>
+        </Control>
+
         <!-- Dragging and screen clamping are handled in Lua (ResourceBars). -->
         <TopLevelControl name="AetherUI_Bars" hidden="true" mouseEnabled="false">
             <Dimensions x="1080" y="44" />

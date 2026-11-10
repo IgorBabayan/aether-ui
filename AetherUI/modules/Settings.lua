@@ -45,6 +45,7 @@ function Settings:Initialize(sv)
     if not LAM then return end
 
     local RB = AUI.ResourceBars
+    local Buffs = AUI.Buffs
     local bars = sv.bars
 
     local layoutValues, layoutNames, layoutTips = {}, {}, {}
@@ -122,6 +123,29 @@ function Settings:Initialize(sv)
             getFunc = function() return bars.height end,
             setFunc = function(value) RB:SetBarHeight(value) end,
             default = RB.HEIGHT_DEFAULT,
+        },
+
+        { type = "header", name = "Buffs" },
+        {
+            type = "checkbox",
+            name = "Show buffs",
+            tooltip = "Show your active buffs as icons.\nTimed buffs come first, soonest to expire on the left.",
+            getFunc = function() return sv.buffs.enabled end,
+            setFunc = function(value) Buffs:SetEnabled(value) end,
+            default = true,
+        },
+        {
+            type = "slider",
+            name = "Buffs per row",
+            tooltip = "How many buff icons fit in one row before a new row starts.\n"
+                .. "Columns: under Stamina, left to right.\n"
+                .. "Pyramid: under Magicka and Stamina, left to right.\n"
+                .. "Default: screen bottom-left corner, bottom to top (a row is one column of icons).",
+            min = Buffs.PER_ROW_MIN, max = Buffs.PER_ROW_MAX, step = 1,
+            getFunc = function() return sv.buffs.perRow end,
+            setFunc = function(value) Buffs:SetPerRow(value) end,
+            disabled = function() return not sv.buffs.enabled end,
+            default = Buffs.PER_ROW_DEFAULT,
         },
 
         { type = "header", name = "Position" },

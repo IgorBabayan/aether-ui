@@ -742,6 +742,9 @@ function RB:ApplyLayout()
             end
         end
     end
+
+    -- Buff icons follow the layout (no-op until the Buffs module is ready).
+    if AUI.Buffs then AUI.Buffs:ApplyPlacement() end
 end
 
 function RB:IsSeparateLayout()
