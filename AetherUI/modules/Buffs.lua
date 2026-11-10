@@ -14,6 +14,12 @@
 --             next column to the left
 -- "Per row" (one setting per list) sets how many icons fit in one line.
 --
+-- Drag and drop (unlock mode): every list can be dragged to its own spot.
+-- The spot is the list's first-icon corner, so rows still grow the same way.
+--   player lists : saved as a screen position
+--   target lists : saved relative to the target bar, so they move with it
+-- Reset position puts every list back on its layout spot.
+--
 -- Order: permanent effects first, then timed ones (soonest to expire first).
 -- Every icon has a timer slot under it; temporary effects show their countdown
 -- there. The slot is always reserved, so rows never shift as effects come and go.
@@ -32,6 +38,8 @@
 --     fragment and the settings preview with no extra scene work
 --   * a disabled list is skipped entirely; both disabled (or the tracker
 --     suspended) = no events, no polls
+--   * dragging adds nothing while locked: the drag frame is created on the
+--     first unlock, and the drag poll (ResourceBars) runs only while held
 
 local AUI = AetherUI
 local EM = EVENT_MANAGER
@@ -136,11 +144,13 @@ List.PER_ROW_MIN, List.PER_ROW_MAX, List.PER_ROW_DEFAULT = PER_ROW_MIN, PER_ROW_
 -- o.key    : saved vars key        o.cmd   : slash command (default: key)
 -- o.label  : chat output           o.prefix: icon control names
 -- o.bevel  : "buffs" | "debuffs" frame colors
+-- o.dragLabel: name shown in unlock mode
 local function NewList(o)
     return setmetatable({
         key = o.key,
         cmd = o.cmd or o.key,
         label = o.label,
+        dragLabel = o.dragLabel or o.label,
         prefix = o.prefix,
         bevel = BEVELS[o.bevel],
         icons = {},
@@ -149,19 +159,37 @@ local function NewList(o)
         count = 0,                -- entries collected in the current pass
         shown = 0,                -- icons currently visible
         timedFrom = 1,            -- icons timedFrom..shown have a countdown (timed sort last)
+        unlocked = false,
     }, List)
 end
 
+-- Where on a rect a point sits, as -1 / 0 / +1 of the half size from the centre.
+local POINT_SIGN = {
+    [TOPLEFT] = { -1, -1 }, [TOPRIGHT] = { 1, -1 },
+    [BOTTOMLEFT] = { -1, 1 }, [BOTTOMRIGHT] = { 1, 1 },
+}
+
 -- parent: control the icon container belongs to (shares its visibility).
-function List:Init(sv, parent, tracker)
+-- dragRelTo: control a dragged spot is saved against (nil = the screen).
+function List:Init(sv, parent, tracker, dragRelTo)
     local s = sv[self.key]
     if type(s) ~= "table" then s = {}; sv[self.key] = s end
     if s.enabled == nil then s.enabled = true end
     s.perRow = zo_clamp(zo_round(tonumber(s.perRow) or PER_ROW_DEFAULT), PER_ROW_MIN, PER_ROW_MAX)
+    if type(s.point) ~= "table" or not (tonumber(s.point.x) and tonumber(s.point.y)) then s.point = nil end
     self.sv = s
     self.tracker = tracker
-    self.container = WINDOW_MANAGER:CreateControl(self.prefix .. "Container", parent, CT_CONTROL)
-    self.container:SetHidden(not s.enabled)
+    self.dragRelTo = dragRelTo
+    local c = WINDOW_MANAGER:CreateControl(self.prefix .. "Container", parent, CT_CONTROL)
+    self.container = c
+    c:SetHidden(not s.enabled)
+    self.onDragSave = function(x, y) self:SaveDragged(x, y) end
+    c:SetHandler("OnMouseDown", function(_, button)
+        if button == MOUSE_BUTTON_INDEX_LEFT then AUI.ResourceBars:BeginFreeDrag(c, 0, 0, self.onDragSave) end
+    end)
+    c:SetHandler("OnMouseUp", function(_, button)
+        if button == MOUSE_BUTTON_INDEX_LEFT then AUI.ResourceBars:EndDrag() end
+    end)
 end
 
 function List:CreateIcon(index)
@@ -194,18 +222,74 @@ function List:AnchorIcon(icon)
 end
 
 -- p = { flow, relPoint, ox, oy }; relTo = control to attach to (nil = GuiRoot).
--- Not a hot path: load / layout change only.
+-- A dragged spot (sv.point) wins over p. Not a hot path: load / layout change only.
 function List:Place(p, relTo)
+    self.placement, self.placeRelTo = p, relTo
     local flow = FLOWS[p.flow]
-    local c = self.container
-    c:ClearAnchors()
-    c:SetAnchor(flow.point, relTo or GuiRoot, p.relPoint, p.ox, p.oy)
     if flow ~= self.flow then
         self.flow = flow
         self:Relayout()
     else
         self:UpdateContainerSize()
     end
+    self:ApplyAnchor()
+end
+
+function List:ApplyAnchor()
+    local p = self.placement
+    if not p then return end
+    local c, point = self.container, self.flow.point
+    c:ClearAnchors()
+    local spot = self.sv.point
+    if spot then
+        c:SetAnchor(point, self.dragRelTo or GuiRoot, TOPLEFT, spot.x, spot.y)
+    else
+        c:SetAnchor(point, self.placeRelTo or GuiRoot, p.relPoint, p.ox, p.oy)
+    end
+end
+
+-- Drag ended with the container centred on (x, y): save its flow corner.
+function List:SaveDragged(x, y)
+    local w, h = self.container:GetDimensions()
+    local sign = POINT_SIGN[self.flow.point]
+    x, y = x + sign[1] * w / 2, y + sign[2] * h / 2
+    local rel = self.dragRelTo
+    if rel then x, y = x - rel:GetLeft(), y - rel:GetTop() end
+    self.sv.point = { x = zo_round(x), y = zo_round(y) }
+    self:ApplyAnchor()
+end
+
+function List:ResetPosition()
+    if not self.sv or not self.sv.point then return end
+    self.sv.point = nil
+    self:ApplyAnchor()
+end
+
+-- Unlock mode: the list gets a drag frame at least one full row in size, so it
+-- can be grabbed and placed even with no icons.
+function List:SetUnlocked(unlocked)
+    if not self.container or self.unlocked == unlocked then return end
+    self.unlocked = unlocked
+    local c = self.container
+    if unlocked and not self.dragOverlay then
+        local o = WINDOW_MANAGER:CreateControl(self.prefix .. "DragOverlay", c, CT_TEXTURE)
+        o:SetColor(0.784, 0.643, 0.392, 0.18)
+        o:SetAnchorFill(c)
+        o:SetDrawLevel(0)
+        local l = WINDOW_MANAGER:CreateControl(self.prefix .. "DragLabel", c, CT_LABEL)
+        l:SetFont("ZoFontGameSmall")
+        l:SetColor(0.91, 0.86, 0.75, 1)
+        l:SetText(self.dragLabel)
+        l:SetAnchor(CENTER, c, CENTER, 0, 0)
+        l:SetDrawLevel(10)
+        self.dragOverlay, self.dragText = o, l
+    end
+    if self.dragOverlay then
+        self.dragOverlay:SetHidden(not unlocked)
+        self.dragText:SetHidden(not unlocked)
+    end
+    c:SetMouseEnabled(unlocked)
+    self:UpdateContainerSize()
 end
 
 function List:Relayout()
@@ -220,6 +304,10 @@ function List:UpdateContainerSize()
     local n, perRow = self.shown, self.sv.perRow
     local along = n < perRow and n or perRow
     local lines = n > 0 and mceil(n / perRow) or 0
+    if self.unlocked then
+        along = perRow
+        if lines < 1 then lines = 1 end
+    end
     local w, h
     if self.flow.vertical then
         w, h = lines * STEP_X, along * STEP_Y
@@ -453,8 +541,8 @@ function Tracker:SetTimerRunning(run)
 end
 
 -- Player effects ------------------------------------------------------------------
-local Buffs = NewList({ key = "buffs", label = "buffs", prefix = "AetherUI_Buff", bevel = "buffs" })
-local Debuffs = NewList({ key = "debuffs", label = "debuffs", prefix = "AetherUI_Debuff", bevel = "debuffs" })
+local Buffs = NewList({ key = "buffs", label = "buffs", dragLabel = "Buffs", prefix = "AetherUI_Buff", bevel = "buffs" })
+local Debuffs = NewList({ key = "debuffs", label = "debuffs", dragLabel = "Debuffs", prefix = "AetherUI_Debuff", bevel = "debuffs" })
 AUI.Buffs, AUI.Debuffs = Buffs, Debuffs
 
 local Effects = {
@@ -486,6 +574,18 @@ function Effects:ApplyPlacement()
     local pd = PLAYER_PLACEMENTS.debuffs[layout] or PLAYER_PLACEMENTS.debuffs.default
     Buffs:Place(pb, pb.bar and bars[pb.bar].control)
     Debuffs:Place(pd, pd.bar and bars[pd.bar].control)
+end
+
+function Effects:SetUnlocked(unlocked)
+    if not self.ready then return end
+    Buffs:SetUnlocked(unlocked)
+    Debuffs:SetUnlocked(unlocked)
+end
+
+function Effects:ResetPosition()
+    if not self.ready then return end
+    Buffs:ResetPosition()
+    Debuffs:ResetPosition()
 end
 
 function Effects:HandleCommand(cmd, rest)

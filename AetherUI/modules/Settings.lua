@@ -178,8 +178,9 @@ function Settings:Initialize(sv)
         {
             type = "checkbox",
             name = "Show target bar",
-            tooltip = "Health bar for what you are looking at, in the LUI target frame spot "
-                .. "(lines up with Health in the Columns layout).\nReplaces ESO's own target frame. "
+            tooltip = "Health bar for what you are looking at, level with your Health bar on the other "
+                .. "side of the screen (Columns: the LUI target frame spot).\n"
+                .. "Default / Pyramid layouts: the LUI target frame spot.\nReplaces ESO's own target frame. "
                 .. "Uses the bar width, height and text settings above.",
             getFunc = function() return sv.target.enabled end,
             setFunc = function(value) Target:SetEnabled(value) end,
@@ -231,7 +232,8 @@ function Settings:Initialize(sv)
             type = "checkbox",
             name = "Show mini-boss bars",
             tooltip = "A health bar for each mini-boss a boss summons or fights alongside, "
-                .. "stacked in the LUI boss frames spot (upper right of the screen centre).\n"
+                .. "in a column beside the target bar (the boss bar while you target the boss).\n"
+                .. "One mini-boss is level with the target bar; two or more are centred on it.\n"
                 .. "The mini-boss name is on the left of the bar, its health on the right. No buffs or debuffs.\n"
                 .. "The main boss is the one with the most max health; it keeps ESO's own boss bar.\n"
                 .. "Uses the bar width, height and text settings above.",
@@ -244,9 +246,11 @@ function Settings:Initialize(sv)
         {
             type = "checkbox",
             name = "Unlock bars",
-            tooltip = "Drag the bars to a new position. Locked again when this page closes.\n"
+            tooltip = "Drag the bars and the buff / debuff icons to a new position. "
+                .. "Locked again when this page closes.\n"
                 .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.\n"
-                .. "The target bar and the mini-boss bars each move on their own.",
+                .. "The target bar moves on its own; its mini-boss bars and its buffs / debuffs move with it.\n"
+                .. "Each buff / debuff group can be dragged on its own.",
             getFunc = function() return RB.unlocked end,
             setFunc = function(value) RB:SetUnlocked(value) end,
             default = false,
@@ -254,9 +258,10 @@ function Settings:Initialize(sv)
         {
             type = "button",
             name = "Reset position",
-            tooltip = "Move the bars back to their default position.\nColumns layout: same spot as the LUI player frame.\n"
-                .. "Target bar: same spot as the LUI target frame.\n"
-                .. "Mini-boss bars: same spot as the LUI boss frames.",
+            tooltip = "Move the bars and the buff / debuff icons back to their default position.\n"
+                .. "Columns layout: same spot as the LUI player frame.\n"
+                .. "Target bar: level with your Health bar, mirrored across the screen centre.\n"
+                .. "Mini-boss bars: beside the target bar.",
             func = function() RB:ResetPosition() end,
             width = "half",
         },

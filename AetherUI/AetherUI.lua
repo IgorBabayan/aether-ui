@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.10.0"
+AUI.version = "0.11.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -21,26 +21,29 @@ local DEFAULTS = {
     buffs = {
         enabled = true,      -- show the player buff icons
         perRow = 8,          -- icons per row (1-20); default layout: icons per column, bottom -> top
+        point = nil,         -- { x, y } dragged spot of the first-icon corner (screen); nil = layout spot
     },
     debuffs = {
         enabled = true,      -- show the player debuff icons
         perRow = 8,          -- icons per row (1-20); default layout: icons per column, bottom -> top
+        point = nil,         -- { x, y } dragged spot of the first-icon corner (screen); nil = layout spot
     },
     target = {
         enabled = true,      -- show the target health bar (replaces ESO's target frame)
-        point = nil,         -- { x, y } center of the target bar; nil = LUI target frame spot
+        point = nil,         -- { x, y } center of the target bar; nil = mirrors the player Health bar
     },
     targetBuffs = {
         enabled = true,      -- target buff icons: under the target bar, left to right
         perRow = 8,          -- icons per row (1-20)
+        point = nil,         -- { x, y } dragged spot, relative to the target bar; nil = under the bar
     },
     targetDebuffs = {
         enabled = true,      -- target debuff icons: above the target name, left to right
         perRow = 8,          -- icons per row (1-20)
+        point = nil,         -- { x, y } dragged spot, relative to the target bar; nil = above the name
     },
     miniBoss = {
-        enabled = true,      -- one health bar (name + HP) per mini-boss next to the main boss
-        point = nil,         -- { x, y } centre of the first mini-boss bar; nil = LUI boss frames spot
+        enabled = true,      -- one health bar (name + HP) per mini-boss, in a column beside the target bar
     },
     keybinds = {
         defaultsApplied = false, -- default keys (F12 reload, Home house) are set once, never re-applied

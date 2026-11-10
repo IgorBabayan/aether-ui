@@ -6,9 +6,14 @@
 --   * buffs under the bar, left to right, next row below
 --   * permanent effects first, timed ones after with a timer under the icon
 --
--- Default spot: the bar's top-left corner sits where LUI puts its target
--- frame, (192, 205) from the screen centre on a 1080p canvas, scaled like the
--- player bars. So in Columns the target bar lines up with the Health bar.
+-- Default spot: level with the player's Health bar and mirrored across the
+-- screen centre (same top edge, same distance from the centre). It follows the
+-- Health bar whenever the player bars are moved, resized or change layout.
+-- In Columns at the default width this is exactly LUI's target frame spot.
+-- When Health sits across the screen centre (Default / Pyramid layouts) a
+-- mirror would overlap it, so the bar uses LUI's target frame spot instead:
+-- (192, 205) from the screen centre on a 1080p canvas, scaled like the bars.
+-- A bar the player dragged keeps its own spot until Reset position.
 -- Width / height / text follow the player bar settings.
 --
 -- Performance:
@@ -21,6 +26,8 @@
 --   * no target = frame hidden, no polls; disabled = no events at all
 --   * ESO's own target frame is parked under a hidden control (no per-event
 --     hiding) and handed back when the bar is turned off
+--   * Health alignment is worked out only when the player bars move or
+--     change size (one rect read), never per frame
 
 local AUI = AetherUI
 local EM = EVENT_MANAGER
@@ -66,11 +73,11 @@ local BUFF_PLACEMENT = { flow = "rightDown", relPoint = BOTTOMLEFT, ox = 0, oy =
 local DEBUFF_PLACEMENT = { flow = "rightUp", relPoint = TOPLEFT, ox = 0, oy = -(NAME_H + NAME_GAP + BAR_GAP) }
 
 local TargetBuffs = Effects.NewList({
-    key = "targetBuffs", cmd = "tbuffs", label = "target buffs",
+    key = "targetBuffs", cmd = "tbuffs", label = "target buffs", dragLabel = "Target buffs",
     prefix = "AetherUI_TargetBuff", bevel = "buffs",
 })
 local TargetDebuffs = Effects.NewList({
-    key = "targetDebuffs", cmd = "tdebuffs", label = "target debuffs",
+    key = "targetDebuffs", cmd = "tdebuffs", label = "target debuffs", dragLabel = "Target debuffs",
     prefix = "AetherUI_TargetDebuff", bevel = "debuffs",
 })
 AUI.TargetBuffs, AUI.TargetDebuffs = TargetBuffs, TargetDebuffs
@@ -111,20 +118,24 @@ function Target:Initialize(sv)
     self.nameText, self.levelText, self.nameColor = nil, nil, nil
 
     -- Drag (unlock mode): grab the bar, the frame moves; saved on its own.
-    local function save(x, y) self.sv.point = { x = x, y = y } end
+    self.savePoint = function(x, y)
+        self.sv.point = { x = x, y = y }
+        if AUI.MiniBoss then AUI.MiniBoss:ApplyPosition() end -- may switch side
+    end
     bar.control:SetHandler("OnMouseDown", function(_, button)
-        if button == MOUSE_BUTTON_INDEX_LEFT then RB:BeginFreeDrag(tl, bar.dragPadX, DRAG_PAD_Y, save) end
+        if button == MOUSE_BUTTON_INDEX_LEFT then self:BeginDrag() end
     end)
     bar.control:SetHandler("OnMouseUp", function(_, button)
         if button == MOUSE_BUTTON_INDEX_LEFT then RB:EndDrag() end
     end)
 
-    -- Effects: lists live inside the frame, so they hide with it.
+    -- Effects: lists live inside the frame, so they hide with it. Dragged
+    -- spots are kept relative to the bar, so the icons travel with it.
     local tracker = Effects.NewTracker(UNIT, NAME .. "Effects", TargetBuffs, TargetDebuffs)
     tracker.suspended = true -- woken by ApplyEnabled
     self.tracker = tracker
-    TargetBuffs:Init(sv, frame, tracker)
-    TargetDebuffs:Init(sv, frame, tracker)
+    TargetBuffs:Init(sv, frame, tracker, bar.control)
+    TargetDebuffs:Init(sv, frame, tracker, bar.control)
     TargetBuffs:Place(BUFF_PLACEMENT, bar.control)
     TargetDebuffs:Place(DEBUFF_PLACEMENT, bar.control)
 
@@ -169,21 +180,55 @@ function Target:ApplyText()
     self.bar:ApplyTextMode(AUI.ResourceBars.sv.text)
 end
 
+-- Top-left corner that mirrors the player's Health bar across the screen
+-- centre, or nil when Health sits across the centre (a mirror would overlap).
+local function MirrorHealth()
+    local health = AUI.ResourceBars.health
+    if not health then return nil end
+    local c = health.control
+    local left, top, right = c:GetLeft(), c:GetTop(), c:GetRight()
+    local sw = GuiRoot:GetWidth()
+    if not (left and right) or right <= left then return nil end
+    local mid = sw / 2
+    if left < mid and right > mid then return nil end
+    return sw - right, top
+end
+
 function Target:ApplyPosition()
+    if not self.ready then return end
     local tl = self.topLevel
     tl:ClearAnchors()
     local p = self.sv.point
     if p then
         tl:SetAnchor(CENTER, GuiRoot, TOPLEFT, p.x, p.y)
     else
-        local x, y = AUI.ResourceBars.LuiOffset(LUI_TARGET_X, LUI_TARGET_Y)
-        tl:SetAnchor(TOPLEFT, GuiRoot, CENTER, x, y)
+        local x, y = MirrorHealth()
+        if x then
+            tl:SetAnchor(TOPLEFT, GuiRoot, TOPLEFT, x, y)
+        else
+            x, y = AUI.ResourceBars.LuiOffset(LUI_TARGET_X, LUI_TARGET_Y)
+            tl:SetAnchor(TOPLEFT, GuiRoot, CENTER, x, y)
+        end
     end
+    -- Mini-boss bars hang off this bar; they may need to switch side.
+    if AUI.MiniBoss then AUI.MiniBoss:ApplyPosition() end
+end
+
+-- Player bars moved / resized: an unmoved target bar stays level with Health.
+function Target:FollowPlayer()
+    if self.ready and not self.sv.point then self:ApplyPosition() end
+end
+
+-- Unlock mode: the target bar and everything hanging off it move together.
+function Target:BeginDrag()
+    AUI.ResourceBars:BeginFreeDrag(self.topLevel, self.bar.dragPadX, DRAG_PAD_Y, self.savePoint)
 end
 
 function Target:ResetPosition()
     if not self.ready then return end
     self.sv.point = nil
+    TargetBuffs:ResetPosition()
+    TargetDebuffs:ResetPosition()
     self:ApplyPosition()
 end
 
@@ -327,6 +372,8 @@ function Target:SetUnlocked(unlocked)
     bar.control:SetMouseEnabled(unlocked and self.sv.enabled)
     bar.dragOverlay:SetHidden(not unlocked)
     bar.dragLabel:SetHidden(not unlocked)
+    TargetBuffs:SetUnlocked(unlocked)
+    TargetDebuffs:SetUnlocked(unlocked)
     self:UpdateVisibility()
 end
 

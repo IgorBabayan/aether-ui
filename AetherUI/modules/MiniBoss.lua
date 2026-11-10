@@ -10,9 +10,15 @@
 -- unit is a mini-boss. One boss alone = no bars. ESO's own boss bar under the
 -- compass is left as it is.
 --
--- Default spot: LUI's boss frames spot. The first bar's top-left corner sits
--- at (306, -312) from the screen centre on a 1080p canvas, scaled like the
--- player and target bars; more mini-bosses stack downward from there.
+-- Spot: a column right next to the target bar (the boss bar while you target
+-- the boss), on its outer side:
+--   * one mini-boss  : its bar is level with the target bar
+--   * two or more    : the column is centred on the target bar's row
+-- The column goes on the right of the target bar. With wide bars the
+-- mini-boss bars get narrower to fit the space left on the right (down to
+-- MIN_WIDTH); only below that does the column move to the target bar's left.
+-- The column is anchored to the target bar, so it follows it when the target
+-- bar is dragged; grabbing a mini-boss bar in unlock mode drags the target bar.
 -- Width / height / text follow the player bar settings; bars are at least
 -- tall enough for the name.
 --
@@ -26,6 +32,9 @@
 --   * bars are pooled and never destroyed; a bar is re-pointed at a new unit
 --     instead of being recreated; names are pushed only when they change
 --   * no mini-bosses = frame hidden, nothing runs; disabled = no events at all
+--   * centring is native anchoring: the top-level is resized only when the
+--     number of bars changes, and the side is picked only when the target bar
+--     or the bar size changes, never per frame
 
 local AUI = AetherUI
 local EM = EVENT_MANAGER
@@ -42,11 +51,12 @@ local MAX = MAX_BOSSES or 12
 local BOSS_TAGS = {}
 for i = 1, MAX do BOSS_TAGS[i] = "boss" .. i end
 
-local LUI_BOSS_X, LUI_BOSS_Y = 306, -312 -- LUI boss frames top-left, 1080p
 local ROW_GAP = 8            -- space between stacked bars
+local SIDE_GAP = 8           -- space between the target bar's spikes and ours
+local SCREEN_MARGIN = 8
+local MIN_WIDTH = 140        -- narrowest mini-boss bar before switching side
 local TEXT_PAD = 6           -- name / value inset from the bar ends
 local NAME_VALUE_GAP = 8
-local DRAG_PAD_Y = 10
 local BAR_CFG = { grow = "center" }
 local PLACEHOLDER = "Mini-boss"
 local NAME_FONT = "$(BOLD_FONT)|13|soft-shadow-thick"
@@ -74,15 +84,17 @@ function MiniBoss:Initialize(sv)
     self.byTag = {}      -- unit tag -> slot, for the health event
     self.maxByTag = {}   -- unit tag -> max health seen at the last rebuild
     self.list = {}       -- reused: mini-boss tags in the current rebuild
-    self.width, self.barHeight = 0, 0
+    self.width, self.barHeight = 0, 0   -- shown size (width may be narrowed to fit)
+    self.baseWidth = 0                  -- bar width setting
     self.textOn = false
+    self.side = nil      -- RIGHT / LEFT of the target bar
+    s.point = nil        -- 0.10: own saved spot, now follows the target bar
 
     local fragment = ZO_HUDFadeSceneFragment:New(tl)
     self.fragment = fragment
     HUD_SCENE:AddFragment(fragment)
     HUD_UI_SCENE:AddFragment(fragment)
 
-    self.savePoint = function(x, y) self.sv.point = { x = x, y = y } end
     self.onRebuild = function()
         EM:UnregisterForUpdate(REBUILD_NAME)
         self.pending = false
@@ -98,8 +110,7 @@ function MiniBoss:Initialize(sv)
     end
 
     self.ready = true
-    self:ApplyLayout()
-    self:ApplyPosition()
+    self:ApplyLayout() -- also places the column
     self:ApplyEnabled()
 end
 
@@ -145,11 +156,10 @@ function MiniBoss:GetSlot(i)
     label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
     label:SetDrawLevel(16)
 
-    -- Drag (unlock mode): any bar moves the whole stack.
+    -- Drag (unlock mode): the column belongs to the target bar, so any
+    -- mini-boss bar drags the target bar (and the column with it).
     c:SetHandler("OnMouseDown", function(_, button)
-        if button == MOUSE_BUTTON_INDEX_LEFT then
-            RB:BeginFreeDrag(self.topLevel, bar.dragPadX, DRAG_PAD_Y, self.savePoint)
-        end
+        if button == MOUSE_BUTTON_INDEX_LEFT then AUI.Target:BeginDrag() end
     end)
     c:SetHandler("OnMouseUp", function(_, button)
         if button == MOUSE_BUTTON_INDEX_LEFT then RB:EndDrag() end
@@ -251,6 +261,7 @@ function MiniBoss:ShowCount(n)
         slots[i].bar.control:SetHidden(false)
     end
     self.count = n
+    if n ~= old and n > 0 then self:UpdateSize() end
 
     local show = n > 0
     if show ~= self.shown then
@@ -263,17 +274,30 @@ end
 function MiniBoss:ApplyLayout()
     if not self.ready then return end
     local RB = AUI.ResourceBars
-    local w = RB.sv.width
     local bh = RB:GetBarHeight()
     if bh < RB.BAR_HEIGHT_TEXT then bh = RB.BAR_HEIGHT_TEXT end -- room for the name
-    self.width, self.barHeight = w, bh
+    self.baseWidth, self.barHeight = RB.sv.width, bh
+    self.width = 0 -- forces the bars to be laid out by ApplyPosition
+    self:ApplyText()
+    self:ApplyPosition() -- picks side + width, lays the bars out
+end
+
+function MiniBoss:SetWidth(w)
+    if w == self.width then return end
+    self.width = w
+    local bh = self.barHeight
     for i = 1, #self.slots do
         self.slots[i].bar:ApplyLayout(BAR_CFG, w, bh)
     end
-    -- The top-level is the first bar; the rest hang below it, so the saved
-    -- centre never moves when mini-bosses come and go.
-    self.topLevel:SetDimensions(w, bh)
-    self:ApplyText()
+    self:UpdateSize()
+end
+
+-- The top-level is exactly the shown column, so anchoring its centre line to
+-- the target bar centres the column (one bar = level with the target bar).
+function MiniBoss:UpdateSize()
+    local n = self.count
+    if n < 1 then n = 1 end
+    self.topLevel:SetDimensions(self.width, n * self.barHeight + (n - 1) * ROW_GAP)
 end
 
 function MiniBoss:ApplyText()
@@ -288,22 +312,33 @@ function MiniBoss:ApplyText()
     end
 end
 
+-- Beside the target bar, clear of both bars' caps and spikes: right side,
+-- narrowed to fit if needed, left side only when even MIN_WIDTH won't fit.
+-- Called on load and when the target bar or the bar size changes.
 function MiniBoss:ApplyPosition()
+    if not self.ready then return end
+    local RB, Target = AUI.ResourceBars, AUI.Target
+    local anchor = Target.bar.control
+    local ownOverhang = RB.Overhang(self.barHeight)
+    local gap = RB.Overhang(RB:GetBarHeight()) + ownOverhang + SIDE_GAP
+    local w, side = self.baseWidth, RIGHT
+    local right = anchor:GetRight()
+    if right then
+        -- Room between our left spike and the screen edge, our right spike included.
+        local room = GuiRoot:GetWidth() - SCREEN_MARGIN - ownOverhang - right - gap
+        if room < w then
+            if room >= MIN_WIDTH then w = zo_round(room) else side = LEFT end
+        end
+    end
+    self.side = side
+    self:SetWidth(w)
     local tl = self.topLevel
     tl:ClearAnchors()
-    local p = self.sv.point
-    if p then
-        tl:SetAnchor(CENTER, GuiRoot, TOPLEFT, p.x, p.y)
+    if side == RIGHT then
+        tl:SetAnchor(LEFT, anchor, RIGHT, gap, 0)
     else
-        local x, y = AUI.ResourceBars.LuiOffset(LUI_BOSS_X, LUI_BOSS_Y)
-        tl:SetAnchor(TOPLEFT, GuiRoot, CENTER, x, y)
+        tl:SetAnchor(RIGHT, anchor, LEFT, -gap, 0)
     end
-end
-
-function MiniBoss:ResetPosition()
-    if not self.ready then return end
-    self.sv.point = nil
-    self:ApplyPosition()
 end
 
 -- Enable / events ------------------------------------------------------------------

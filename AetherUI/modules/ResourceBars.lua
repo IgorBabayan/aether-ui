@@ -23,6 +23,8 @@
 -- Positioning (unlock mode):
 --   * "default" layout: each bar is dragged on its own; positions saved per bar
 --   * any other layout: the whole group is dragged together
+--   * whenever the player bars move or change size, the target bar is told
+--     once (it mirrors the Health bar), never per frame
 
 local AUI = AetherUI
 local EM = EVENT_MANAGER
@@ -708,6 +710,17 @@ function RB:CreateBar(parent, powerType, unitTag, controlName)
 end
 RB.LuiOffset = LuiOffset
 
+-- How far the caps + spikes stick out past one bar end at bar height bh.
+function RB.Overhang(bh)
+    local off, len = SpikeGeometry(bh)
+    return off + len
+end
+
+-- The player bars moved or changed size: bars that line up with them follow.
+function RB:NotifyMoved()
+    if AUI.Target then AUI.Target:FollowPlayer() end
+end
+
 -- Layout / visibility (used by the settings panel and slash commands) ---------
 RB.LAYOUT_ORDER = LAYOUT_ORDER
 RB.TEXT_ORDER = TEXT_ORDER
@@ -763,6 +776,7 @@ function RB:ApplyLayout()
     if AUI.Effects then AUI.Effects:ApplyPlacement() end
     if AUI.Target then AUI.Target:ApplyLayout() end
     if AUI.MiniBoss then AUI.MiniBoss:ApplyLayout() end
+    self:NotifyMoved()
 end
 
 function RB:IsSeparateLayout()
@@ -867,8 +881,8 @@ function RB:ResetPosition()
     self.sv.point = nil
     ZO_ClearTable(self.sv.points)
     self:ApplyLayout() -- also re-applies the default position
+    if AUI.Effects then AUI.Effects:ResetPosition() end
     if AUI.Target then AUI.Target:ResetPosition() end
-    if AUI.MiniBoss then AUI.MiniBoss:ResetPosition() end
 end
 
 -- Dragging ---------------------------------------------------------------------
@@ -878,7 +892,7 @@ end
 -- pinned the group to the screen bottom while dragging.)
 --   default layout : drag target is one bar, saved to sv.points[key]
 --   other layouts  : drag target is the whole top-level, saved to sv.point
---   free drag      : any other frame (target / mini-boss bars), saved by its own callback
+--   free drag      : any other frame (target bar, effect icons), saved by its own callback
 -- The poll runs only while the mouse button is held and skips frames where the
 -- cursor has not moved.
 local drag = { control = nil, padX = 0, padY = 0, key = nil, save = nil, dx = 0, dy = 0, mx = 0, my = 0 }
@@ -934,11 +948,13 @@ function RB:EndDrag()
     drag.control, drag.key, drag.save = nil, nil, nil
     if save then
         save(x, y)
+        return
     elseif key then
         self.sv.points[key] = { x = x, y = y }
     else
         self.sv.point = { x = x, y = y }
     end
+    self:NotifyMoved()
 end
 
 -- Switch mouse handling between per-bar and group dragging.
@@ -965,6 +981,7 @@ function RB:SetUnlocked(unlocked)
     self.unlocked = unlocked
     self:ApplyDragMode()
     self:WakeAll()
+    if AUI.Effects then AUI.Effects:SetUnlocked(unlocked) end
     if AUI.Target then AUI.Target:SetUnlocked(unlocked) end
     if AUI.MiniBoss then AUI.MiniBoss:SetUnlocked(unlocked) end
 end
@@ -980,9 +997,9 @@ function RB:HandleCommand(cmd, rest)
     if cmd == "unlock" then
         self:SetUnlocked(true)
         if self:IsSeparateLayout() then
-            AUI:Print("bars unlocked. Drag each bar, then /aether lock")
+            AUI:Print("bars unlocked. Drag each bar and the buff / debuff icons, then /aether lock")
         else
-            AUI:Print("bars unlocked. Drag the group, then /aether lock")
+            AUI:Print("bars unlocked. Drag the group and the buff / debuff icons, then /aether lock")
         end
     elseif cmd == "lock" then
         self:SetUnlocked(false)
