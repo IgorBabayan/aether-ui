@@ -108,6 +108,12 @@ local STYLES = {
     },
 }
 
+-- Companion health (Companion module): teal, like ESO's companion frame.
+local STYLE_COMPANION = {
+    key = "Companion", grow = "left",
+    top = C("3FAF94"), bottom = C("0D4A44"), gain = C("8FDCC6", 0.45), warn = C("5FF0C8"),
+}
+
 local ANCHOR_POINT = { center = CENTER, left = LEFT, right = RIGHT }
 
 -- Layouts ----------------------------------------------------------------------
@@ -704,10 +710,12 @@ function RB:RegisterEvents()
     end
 end
 
--- Shared with the Target module: same bar art, animations and ticker.
-function RB:CreateBar(parent, powerType, unitTag, controlName)
-    return Bar:New(parent, powerType, STYLES[powerType], unitTag, controlName)
+-- Shared with the Target / MiniBoss / Companion modules: same bar art,
+-- animations and ticker. style = optional colour set (default: by power type).
+function RB:CreateBar(parent, powerType, unitTag, controlName, style)
+    return Bar:New(parent, powerType, style or STYLES[powerType], unitTag, controlName)
 end
+RB.STYLE_COMPANION = STYLE_COMPANION
 RB.LuiOffset = LuiOffset
 
 -- How far the caps + spikes stick out past one bar end at bar height bh.
@@ -771,8 +779,11 @@ function RB:ApplyLayout()
         end
     end
 
-    -- Buff / debuff icons follow the layout; the target and mini-boss bars
-    -- follow the bar size (all no-ops until their module is ready).
+    -- The companion bar sits on the player bars (and may push the buff
+    -- icons), so it goes first; buff / debuff icons follow the layout; the
+    -- target and mini-boss bars follow the bar size (all no-ops until their
+    -- module is ready).
+    if AUI.Companion then AUI.Companion:ApplyLayout() end
     if AUI.Effects then AUI.Effects:ApplyPlacement() end
     if AUI.Target then AUI.Target:ApplyLayout() end
     if AUI.MiniBoss then AUI.MiniBoss:ApplyLayout() end
@@ -857,6 +868,7 @@ function RB:SetPreview(enabled)
     self:WakeAll()
     if AUI.Target then AUI.Target:SetPreview(enabled) end
     if AUI.MiniBoss then AUI.MiniBoss:SetPreview(enabled) end
+    if AUI.Companion then AUI.Companion:SetPreview(enabled) end
 end
 
 -- Position / settings ----------------------------------------------------------
@@ -883,6 +895,7 @@ function RB:ResetPosition()
     self:ApplyLayout() -- also re-applies the default position
     if AUI.Effects then AUI.Effects:ResetPosition() end
     if AUI.Target then AUI.Target:ResetPosition() end
+    if AUI.Companion then AUI.Companion:ResetPosition() end
 end
 
 -- Dragging ---------------------------------------------------------------------
@@ -984,6 +997,7 @@ function RB:SetUnlocked(unlocked)
     if AUI.Effects then AUI.Effects:SetUnlocked(unlocked) end
     if AUI.Target then AUI.Target:SetUnlocked(unlocked) end
     if AUI.MiniBoss then AUI.MiniBoss:SetUnlocked(unlocked) end
+    if AUI.Companion then AUI.Companion:SetUnlocked(unlocked) end
 end
 
 function RB:ApplyText()
@@ -991,6 +1005,7 @@ function RB:ApplyText()
     for _, bar in pairs(self.bars) do bar:ApplyTextMode(mode) end
     if AUI.Target then AUI.Target:ApplyText() end
     if AUI.MiniBoss then AUI.MiniBoss:ApplyText() end
+    if AUI.Companion then AUI.Companion:ApplyText() end
 end
 
 function RB:HandleCommand(cmd, rest)

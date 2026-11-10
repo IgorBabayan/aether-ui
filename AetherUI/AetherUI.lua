@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.11.0"
+AUI.version = "0.12.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -44,6 +44,10 @@ local DEFAULTS = {
     },
     miniBoss = {
         enabled = true,      -- one health bar (name + HP) per mini-boss, in a column beside the target bar
+    },
+    companion = {
+        enabled = true,      -- companion health bar (replaces ESO's companion frame)
+        point = nil,         -- { x, y } dragged centre; nil = centred on the player bars
     },
     keybinds = {
         defaultsApplied = false, -- default keys (F12 reload, Home house) are set once, never re-applied
@@ -91,7 +95,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off> | companion <on|off>")
 end
 
 local function OnAddOnLoaded(_, addonName)

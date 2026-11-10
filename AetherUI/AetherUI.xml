@@ -184,6 +184,20 @@
             </Controls>
         </TopLevelControl>
 
+        <!--
+            Companion bar (Companion module). Same pattern as the target bar:
+            the fragment owns the top-level, the inner Frame is shown only while
+            a companion is out (or a placeholder in unlock / settings preview).
+        -->
+        <TopLevelControl name="AetherUI_Companion" hidden="true" mouseEnabled="false">
+            <Dimensions x="300" y="20" />
+            <Controls>
+                <Control name="$(parent)Frame" hidden="true">
+                    <AnchorFill />
+                </Control>
+            </Controls>
+        </TopLevelControl>
+
         <!-- Dragging and screen clamping are handled in Lua (ResourceBars). -->
         <TopLevelControl name="AetherUI_Bars" hidden="true" mouseEnabled="false">
             <Dimensions x="1080" y="44" />

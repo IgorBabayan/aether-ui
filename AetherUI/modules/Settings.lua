@@ -50,6 +50,7 @@ function Settings:Initialize(sv)
     local Target = AUI.Target
     local TargetBuffs, TargetDebuffs = AUI.TargetBuffs, AUI.TargetDebuffs
     local MiniBoss = AUI.MiniBoss
+    local Companion = AUI.Companion
     local bars = sv.bars
 
     local layoutValues, layoutNames, layoutTips = {}, {}, {}
@@ -242,6 +243,21 @@ function Settings:Initialize(sv)
             default = true,
         },
 
+        { type = "header", name = "Companion" },
+        {
+            type = "checkbox",
+            name = "Show companion bar",
+            tooltip = "Health bar for your companion, centred on your bars and as wide as the Health bar.\n"
+                .. "Columns / Pyramid: under the player bars; your buffs move down under it.\n"
+                .. "Default layout: above the Health bar.\n"
+                .. "Companion name on the left, its health on the right. Replaces ESO's companion frame.\n"
+                .. "Drag it anywhere while the bars are unlocked.\n"
+                .. "Uses the bar height and text settings above.",
+            getFunc = function() return sv.companion.enabled end,
+            setFunc = function(value) Companion:SetEnabled(value) end,
+            default = true,
+        },
+
         { type = "header", name = "Position" },
         {
             type = "checkbox",
@@ -250,6 +266,7 @@ function Settings:Initialize(sv)
                 .. "Locked again when this page closes.\n"
                 .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.\n"
                 .. "The target bar moves on its own; its mini-boss bars and its buffs / debuffs move with it.\n"
+                .. "The companion bar moves on its own.\n"
                 .. "Each buff / debuff group can be dragged on its own.",
             getFunc = function() return RB.unlocked end,
             setFunc = function(value) RB:SetUnlocked(value) end,
@@ -261,7 +278,8 @@ function Settings:Initialize(sv)
             tooltip = "Move the bars and the buff / debuff icons back to their default position.\n"
                 .. "Columns layout: same spot as the LUI player frame.\n"
                 .. "Target bar: level with your Health bar, mirrored across the screen centre.\n"
-                .. "Mini-boss bars: beside the target bar.",
+                .. "Mini-boss bars: beside the target bar.\n"
+                .. "Companion bar: centred on your bars.",
             func = function() RB:ResetPosition() end,
             width = "half",
         },
