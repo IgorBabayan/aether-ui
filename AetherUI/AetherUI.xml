@@ -169,6 +169,21 @@
             </Controls>
         </TopLevelControl>
 
+        <!--
+            Mini-boss bars (MiniBoss module). The top-level is the size of one
+            bar; the bars are created in Lua inside the Frame, stacked down from
+            its top. The Frame is shown only while there is a mini-boss (or a
+            placeholder in unlock / settings preview).
+        -->
+        <TopLevelControl name="AetherUI_MiniBoss" hidden="true" mouseEnabled="false">
+            <Dimensions x="300" y="20" />
+            <Controls>
+                <Control name="$(parent)Frame" hidden="true">
+                    <AnchorFill />
+                </Control>
+            </Controls>
+        </TopLevelControl>
+
         <!-- Dragging and screen clamping are handled in Lua (ResourceBars). -->
         <TopLevelControl name="AetherUI_Bars" hidden="true" mouseEnabled="false">
             <Dimensions x="1080" y="44" />

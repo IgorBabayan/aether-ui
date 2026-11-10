@@ -49,6 +49,7 @@ function Settings:Initialize(sv)
     local Debuffs = AUI.Debuffs
     local Target = AUI.Target
     local TargetBuffs, TargetDebuffs = AUI.TargetBuffs, AUI.TargetDebuffs
+    local MiniBoss = AUI.MiniBoss
     local bars = sv.bars
 
     local layoutValues, layoutNames, layoutTips = {}, {}, {}
@@ -225,13 +226,27 @@ function Settings:Initialize(sv)
             default = TargetDebuffs.PER_ROW_DEFAULT,
         },
 
+        { type = "header", name = "Mini-bosses" },
+        {
+            type = "checkbox",
+            name = "Show mini-boss bars",
+            tooltip = "A health bar for each mini-boss a boss summons or fights alongside, "
+                .. "stacked under ESO's boss bar at the top of the screen.\n"
+                .. "The mini-boss name is on the left of the bar, its health on the right. No buffs or debuffs.\n"
+                .. "The main boss is the one with the most max health; it keeps ESO's own boss bar.\n"
+                .. "Uses the bar width, height and text settings above.",
+            getFunc = function() return sv.miniBoss.enabled end,
+            setFunc = function(value) MiniBoss:SetEnabled(value) end,
+            default = true,
+        },
+
         { type = "header", name = "Position" },
         {
             type = "checkbox",
             name = "Unlock bars",
             tooltip = "Drag the bars to a new position. Locked again when this page closes.\n"
                 .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.\n"
-                .. "The target bar always moves on its own.",
+                .. "The target bar and the mini-boss bars each move on their own.",
             getFunc = function() return RB.unlocked end,
             setFunc = function(value) RB:SetUnlocked(value) end,
             default = false,
@@ -240,7 +255,8 @@ function Settings:Initialize(sv)
             type = "button",
             name = "Reset position",
             tooltip = "Move the bars back to their default position.\nColumns layout: same spot as the LUI player frame.\n"
-                .. "Target bar: same spot as the LUI target frame.",
+                .. "Target bar: same spot as the LUI target frame.\n"
+                .. "Mini-boss bars: top centre, under ESO's boss bar.",
             func = function() RB:ResetPosition() end,
             width = "half",
         },

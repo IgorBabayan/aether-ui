@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.9.0"
+AUI.version = "0.10.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -37,6 +37,10 @@ local DEFAULTS = {
     targetDebuffs = {
         enabled = true,      -- target debuff icons: above the target name, left to right
         perRow = 8,          -- icons per row (1-20)
+    },
+    miniBoss = {
+        enabled = true,      -- one health bar (name + HP) per mini-boss next to the main boss
+        point = nil,         -- { x, y } centre of the first mini-boss bar; nil = top centre under the compass
     },
     keybinds = {
         defaultsApplied = false, -- default keys (F12 reload, Home house) are set once, never re-applied
@@ -84,7 +88,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off>")
 end
 
 local function OnAddOnLoaded(_, addonName)

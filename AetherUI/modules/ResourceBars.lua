@@ -713,6 +713,7 @@ RB.LAYOUT_ORDER = LAYOUT_ORDER
 RB.TEXT_ORDER = TEXT_ORDER
 RB.WIDTH_MIN, RB.WIDTH_MAX, RB.WIDTH_DEFAULT = WIDTH_MIN, WIDTH_MAX, WIDTH_DEFAULT
 RB.HEIGHT_MIN, RB.HEIGHT_MAX, RB.HEIGHT_DEFAULT = HEIGHT_MIN, HEIGHT_MAX, HEIGHT_DEFAULT
+RB.BAR_HEIGHT_TEXT = BAR_HEIGHT_TEXT
 
 -- Effective bar height: the configured height, but tall enough for text.
 function RB:GetBarHeight()
@@ -757,10 +758,11 @@ function RB:ApplyLayout()
         end
     end
 
-    -- Buff / debuff icons follow the layout; the target bar follows the bar
-    -- size (both no-ops until their module is ready).
+    -- Buff / debuff icons follow the layout; the target and mini-boss bars
+    -- follow the bar size (all no-ops until their module is ready).
     if AUI.Effects then AUI.Effects:ApplyPlacement() end
     if AUI.Target then AUI.Target:ApplyLayout() end
+    if AUI.MiniBoss then AUI.MiniBoss:ApplyLayout() end
 end
 
 function RB:IsSeparateLayout()
@@ -840,6 +842,7 @@ function RB:SetPreview(enabled)
     end
     self:WakeAll()
     if AUI.Target then AUI.Target:SetPreview(enabled) end
+    if AUI.MiniBoss then AUI.MiniBoss:SetPreview(enabled) end
 end
 
 -- Position / settings ----------------------------------------------------------
@@ -865,6 +868,7 @@ function RB:ResetPosition()
     ZO_ClearTable(self.sv.points)
     self:ApplyLayout() -- also re-applies the default position
     if AUI.Target then AUI.Target:ResetPosition() end
+    if AUI.MiniBoss then AUI.MiniBoss:ResetPosition() end
 end
 
 -- Dragging ---------------------------------------------------------------------
@@ -874,7 +878,7 @@ end
 -- pinned the group to the screen bottom while dragging.)
 --   default layout : drag target is one bar, saved to sv.points[key]
 --   other layouts  : drag target is the whole top-level, saved to sv.point
---   free drag      : any other frame (target bar), saved by its own callback
+--   free drag      : any other frame (target / mini-boss bars), saved by its own callback
 -- The poll runs only while the mouse button is held and skips frames where the
 -- cursor has not moved.
 local drag = { control = nil, padX = 0, padY = 0, key = nil, save = nil, dx = 0, dy = 0, mx = 0, my = 0 }
@@ -962,12 +966,14 @@ function RB:SetUnlocked(unlocked)
     self:ApplyDragMode()
     self:WakeAll()
     if AUI.Target then AUI.Target:SetUnlocked(unlocked) end
+    if AUI.MiniBoss then AUI.MiniBoss:SetUnlocked(unlocked) end
 end
 
 function RB:ApplyText()
     local mode = self.sv.text
     for _, bar in pairs(self.bars) do bar:ApplyTextMode(mode) end
     if AUI.Target then AUI.Target:ApplyText() end
+    if AUI.MiniBoss then AUI.MiniBoss:ApplyText() end
 end
 
 function RB:HandleCommand(cmd, rest)
