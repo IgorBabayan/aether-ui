@@ -466,7 +466,7 @@ function Bar:SetValue(cur, max, instant)
         end
     end
 
-    local mode = RB.sv.text
+    local mode = self.textMode or RB.sv.text
     if mode ~= TEXT_NONE then self:SetText(FormatText(mode, cur, max)) end
 
     self:UpdateLow()
@@ -576,6 +576,15 @@ function Bar:ApplyTextMode(mode)
     local visible = mode ~= TEXT_NONE
     self.valueLabel:SetHidden(not visible)
     if visible then self:SetText(FormatText(mode, self.cur, self.max)) end
+end
+
+-- Re-tint the fill (group frames: colour by role). Only the fill, gain and
+-- warning colours change; the frame art stays. Not a hot path.
+function Bar:SetColors(style)
+    SetGradient(self.fillTex, style.top, style.bottom)
+    self.gainTex:SetColor(style.gain:UnpackRGBA())
+    self.glowTex:SetColor(style.warn:UnpackRGB())
+    self.alertTex:SetColor(style.warn:UnpackRGB())
 end
 
 -- Module ---------------------------------------------------------------------
@@ -717,6 +726,21 @@ function RB:CreateBar(parent, powerType, unitTag, controlName, style)
 end
 RB.STYLE_COMPANION = STYLE_COMPANION
 RB.LuiOffset = LuiOffset
+RB.FormatText = FormatText
+
+-- Bar colour set from one base colour (0..1): the base is the top of the fill
+-- gradient, the bottom is a darker shade, like the hand-tuned styles above.
+function RB.MakeStyle(key, r, g, b)
+    local function shade(v) return v * 0.42 end
+    local function tint(v) return v + (1 - v) * 0.35 end
+    return {
+        key = key, grow = "left",
+        top = ZO_ColorDef:New(r, g, b, 1),
+        bottom = ZO_ColorDef:New(shade(r), shade(g), shade(b), 1),
+        gain = ZO_ColorDef:New(tint(r), tint(g), tint(b), 0.45),
+        warn = ZO_ColorDef:New(r, g, b, 1),
+    }
+end
 
 -- How far the caps + spikes stick out past one bar end at bar height bh.
 function RB.Overhang(bh)
@@ -870,6 +894,7 @@ function RB:SetPreview(enabled)
     if AUI.Target then AUI.Target:SetPreview(enabled) end
     if AUI.MiniBoss then AUI.MiniBoss:SetPreview(enabled) end
     if AUI.Companion then AUI.Companion:SetPreview(enabled) end
+    if AUI.Group then AUI.Group:SetPreview(enabled) end
 end
 
 -- Position / settings ----------------------------------------------------------
@@ -897,6 +922,7 @@ function RB:ResetPosition()
     if AUI.Effects then AUI.Effects:ResetPosition() end
     if AUI.Target then AUI.Target:ResetPosition() end
     if AUI.Companion then AUI.Companion:ResetPosition() end
+    if AUI.Group then AUI.Group:ResetPosition() end
 end
 
 -- Dragging ---------------------------------------------------------------------
@@ -999,6 +1025,7 @@ function RB:SetUnlocked(unlocked)
     if AUI.Target then AUI.Target:SetUnlocked(unlocked) end
     if AUI.MiniBoss then AUI.MiniBoss:SetUnlocked(unlocked) end
     if AUI.Companion then AUI.Companion:SetUnlocked(unlocked) end
+    if AUI.Group then AUI.Group:SetUnlocked(unlocked) end
 end
 
 function RB:ApplyText()

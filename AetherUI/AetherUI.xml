@@ -198,6 +198,30 @@
             </Controls>
         </TopLevelControl>
 
+        <!--
+            Group / raid frames (Group module). The fragment owns the
+            top-level; the inner Frame is shown only while grouped (or as a
+            placeholder in unlock / settings preview). The top-level is resized
+            to the shown grid; in unlock mode it takes the mouse and is dragged
+            as one piece. Member bars are created in Lua inside the Frame.
+        -->
+        <TopLevelControl name="AetherUI_Group" hidden="true" mouseEnabled="false">
+            <Dimensions x="240" y="24" />
+            <Controls>
+                <Control name="$(parent)Frame" hidden="true">
+                    <AnchorFill />
+                </Control>
+                <Texture name="$(parent)DragOverlay" color="C8A464" alpha="0.18" hidden="true" level="0">
+                    <Anchor point="TOPLEFT" offsetX="-24" offsetY="-10" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="24" offsetY="10" />
+                </Texture>
+                <Label name="$(parent)DragLabel" font="ZoFontGameSmall" color="E8DCC0" hidden="true"
+                       text="Group frames">
+                    <Anchor point="BOTTOM" relativePoint="TOP" offsetY="-12" />
+                </Label>
+            </Controls>
+        </TopLevelControl>
+
         <!-- Dragging and screen clamping are handled in Lua (ResourceBars). -->
         <TopLevelControl name="AetherUI_Bars" hidden="true" mouseEnabled="false">
             <Dimensions x="1080" y="44" />

@@ -40,6 +40,27 @@ local TEXT_TOOLTIPS = {
     both = "Current / max and percentage, e.g. 18,240 / 24,000  (76%).",
 }
 
+local GROUP_NAME_LABELS = {
+    character = "Character name",
+    account = "Account name",
+    both = "Character + account name",
+}
+local GROUP_NAME_TOOLTIPS = {
+    character = "Character name only, e.g. Aela the Huntress.",
+    account = "Account name only, e.g. @Aela.",
+    both = "Character name followed by the account name, e.g. Aela the Huntress @Aela.",
+}
+local ROLE_LABELS = {
+    tank = "Tank color",
+    healer = "Healer color",
+    dd = "Damage dealer color",
+}
+local ROLE_TOOLTIPS = {
+    tank = "Health bar color of group members with the Tank role.",
+    healer = "Health bar color of group members with the Healer role.",
+    dd = "Health bar color of group members with the Damage Dealer role (or no role).",
+}
+
 local BOOK_CLOSE_LABELS = {
     off = "Off",
     read = "Already read",
@@ -62,6 +83,7 @@ function Settings:Initialize(sv)
     local TargetBuffs, TargetDebuffs = AUI.TargetBuffs, AUI.TargetDebuffs
     local MiniBoss = AUI.MiniBoss
     local Companion = AUI.Companion
+    local Group = AUI.Group
     local Intro, Books, Pledges = AUI.Intro, AUI.Books, AUI.Pledges
     local bars = sv.bars
 
@@ -82,6 +104,26 @@ function Settings:Initialize(sv)
     for i, key in ipairs(RB.TEXT_ORDER) do
         textNames[i] = TEXT_LABELS[key] or key
         textTips[i] = TEXT_TOOLTIPS[key] or ""
+    end
+
+    local groupNames, groupTips = {}, {}
+    for i, key in ipairs(Group.NAME_ORDER) do
+        groupNames[i] = GROUP_NAME_LABELS[key] or key
+        groupTips[i] = GROUP_NAME_TOOLTIPS[key] or ""
+    end
+
+    -- One colour picker per role; changes recolour only that role's bars.
+    local function RoleColor(role)
+        local def = Group.DEFAULT_COLORS[role]
+        return {
+            type = "colorpicker",
+            name = ROLE_LABELS[role],
+            tooltip = ROLE_TOOLTIPS[role],
+            getFunc = function() return Group:GetRoleColor(role) end,
+            setFunc = function(r, g, b) Group:SetRoleColor(role, r, g, b) end,
+            disabled = function() return not sv.group.enabled end,
+            default = { r = def.r, g = def.g, b = def.b },
+        }
     end
 
     local panel = LAM:RegisterAddonPanel(PANEL_NAME, {
@@ -277,6 +319,48 @@ function Settings:Initialize(sv)
             default = true,
         },
 
+        { type = "header", name = "Group frames" },
+        {
+            type = "checkbox",
+            name = "Show group frames",
+            tooltip = "Group and raid frames in the AetherUI bar style. Replaces ESO's group and raid frames.\n"
+                .. "Up to 4 members: one column. 5 or more: columns of 4.\n"
+                .. "Health bar color follows each member's role and changes when they switch role.\n"
+                .. "Leader crown and name on the left, health (or Dead / Offline) on the right.\n"
+                .. "Out of range members are dimmed. Group companions are not shown.\n"
+                .. "Drag them anywhere while the bars are unlocked.",
+            getFunc = function() return sv.group.enabled end,
+            setFunc = function(value) Group:SetEnabled(value) end,
+            default = true,
+        },
+        {
+            type = "dropdown",
+            name = "Name",
+            tooltip = "Name written on each group frame.",
+            choices = groupNames,
+            choicesValues = Group.NAME_ORDER,
+            choicesTooltips = groupTips,
+            getFunc = function() return sv.group.name end,
+            setFunc = function(value) Group:SetNameMode(value) end,
+            disabled = function() return not sv.group.enabled end,
+            default = "character",
+        },
+        {
+            type = "dropdown",
+            name = "Health text",
+            tooltip = "Health text on the right of each group frame.",
+            choices = textNames,
+            choicesValues = RB.TEXT_ORDER,
+            choicesTooltips = textTips,
+            getFunc = function() return sv.group.text end,
+            setFunc = function(value) Group:SetTextMode(value) end,
+            disabled = function() return not sv.group.enabled end,
+            default = "percent",
+        },
+        RoleColor("tank"),
+        RoleColor("healer"),
+        RoleColor("dd"),
+
         { type = "header", name = "General" },
         {
             type = "checkbox",
@@ -328,6 +412,7 @@ function Settings:Initialize(sv)
                 .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.\n"
                 .. "The target bar moves on its own; its mini-boss bars and its buffs / debuffs move with it.\n"
                 .. "The companion bar moves on its own.\n"
+                .. "The group frames move together as one block.\n"
                 .. "Each buff / debuff group can be dragged on its own.",
             getFunc = function() return RB.unlocked end,
             setFunc = function(value) RB:SetUnlocked(value) end,
@@ -340,7 +425,8 @@ function Settings:Initialize(sv)
                 .. "Columns layout: same spot as the LUI player frame.\n"
                 .. "Target bar: level with your Health bar, mirrored across the screen centre.\n"
                 .. "Mini-boss bars: beside the target bar.\n"
-                .. "Companion bar: beside Magicka (Columns), under your bars (Pyramid), above Health (Default).",
+                .. "Companion bar: beside Magicka (Columns), under your bars (Pyramid), above Health (Default).\n"
+                .. "Group frames: top-left, where ESO's group frames are.",
             func = function() RB:ResetPosition() end,
             width = "half",
         },

@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.13.0"
+AUI.version = "0.14.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -48,6 +48,17 @@ local DEFAULTS = {
     companion = {
         enabled = true,      -- companion health bar (replaces ESO's companion frame)
         point = nil,         -- { x, y } dragged centre; nil = centred on the player bars
+    },
+    group = {
+        enabled = true,      -- group / raid frames (replace ESO's group and raid frames)
+        name = "character",  -- name shown: "character" | "account" | "both"
+        text = "percent",    -- health text: "none" | "value" | "percent" | "both"
+        colors = {           -- health fill colour by selected role
+            tank = { r = 0.83, g = 0.29, b = 0.23 },
+            healer = { r = 0.42, g = 0.76, b = 0.29 },
+            dd = { r = 0.60, g = 0.60, b = 0.60 },
+        },
+        point = nil,         -- { x, y } dragged top-left corner; nil = ESO's group frame spot
     },
     misc = {
         skipIntro = true,    -- skip the Bethesda / ZeniMax logo videos at game start (SkipPregameVideos CVar)
@@ -105,7 +116,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off> | companion <on|off> | intro <on|off> | books <off|read|all> | bookmark <on|off> | pledges <on|off>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off> | companion <on|off> | group <on|off> | groupname <character|account|both> | intro <on|off> | books <off|read|all> | bookmark <on|off> | pledges <on|off>")
 end
 
 local function OnAddOnLoaded(_, addonName)
