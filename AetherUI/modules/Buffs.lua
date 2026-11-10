@@ -1,12 +1,13 @@
 -- AetherUI / Buffs + Debuffs
--- Player effect icons, placed by the active bar layout.
+-- Effect icons for the player (here) and the target (Target module, built on
+-- the same lists and trackers exported below).
 --
--- Buffs:
+-- Player buffs:
 --   columns : under the Stamina bar, left to right, next row below
 --   pyramid : under the Magicka + Stamina row, left to right, next row below
 --   default : screen bottom-left corner, bottom to top,
 --             next column to the right
--- Debuffs:
+-- Player debuffs:
 --   columns : above the Health bar, left to right, next row above
 --   pyramid : above the Health bar, left to right, next row above
 --   default : screen bottom-right corner, bottom to top,
@@ -18,18 +19,19 @@
 -- there. The slot is always reserved, so rows never shift as effects come and go.
 --
 -- Performance:
---   * one event (EVENT_EFFECT_CHANGED) filtered natively to the player, shared
---     by both lists; one GetUnitBuffInfo pass feeds buffs and debuffs together
+--   * one tracker per unit; one EVENT_EFFECT_CHANGED registration per tracker,
+--     filtered natively to its unit; one GetUnitBuffInfo pass feeds both lists
 --   * bursts of effect changes are coalesced into one rebuild (REBUILD_MS)
 --   * icons are pooled and never destroyed; an icon keeps its slot, so icons
 --     are re-anchored only when the layout or "per row" changes
 --   * texture / text / hidden state are cached; the C side is touched only
 --     when something actually changes
---   * one countdown poll for both lists, running only while a timed icon is on
+--   * one countdown poll per tracker, running only while a timed icon is on
 --     screen, at TIMER_MS; text changes at most once per second per icon
---   * containers are children of the bar group, so they share the HUD
+--   * containers are children of their bar frame, so they share its HUD
 --     fragment and the settings preview with no extra scene work
---   * a disabled list is skipped entirely; both disabled = no events, no polls
+--   * a disabled list is skipped entirely; both disabled (or the tracker
+--     suspended) = no events, no polls
 
 local AUI = AetherUI
 local EM = EVENT_MANAGER
@@ -43,16 +45,12 @@ local sfmt = string.format
 local mceil, mfloor = math.ceil, math.floor
 local tsort = table.sort
 
-local NAME = "AetherUI_Effects"
-local REBUILD_NAME = NAME .. "Rebuild"
-local TIMER_NAME = NAME .. "Timer"
-
 local ICON_SIZE = 32
 local ICON_GAP = 4
 local TIME_H = 14            -- timer text slot under each icon
 local STEP_X = ICON_SIZE + ICON_GAP
 local STEP_Y = ICON_SIZE + TIME_H + ICON_GAP
-local BAR_GAP = 8            -- space between the bars and the first icon row
+local BAR_GAP = 8            -- space between a bar and the first icon row
 local SCREEN_MARGIN = 12     -- default layout: distance from the screen corner
 local MAX_ICONS = 60         -- hard cap per list, protects against effect floods
 local REBUILD_MS = 100
@@ -70,11 +68,11 @@ local FLOWS = {
     upLeft    = { point = BOTTOMRIGHT, ax = 0,      ay = -STEP_Y, lx = -STEP_X, ly = 0,       by = -TIME_H, vertical = true },
 }
 
--- Container placement per list and bar layout.
+-- Player container placement per list and bar layout.
 --   bar      = power type of the bar to attach to (nil = screen corner)
 --   relPoint = point on that bar / GuiRoot; ox, oy = offset
 local H, M, S = POWERTYPE_HEALTH, POWERTYPE_MAGICKA, POWERTYPE_STAMINA
-local PLACEMENTS = {
+local PLAYER_PLACEMENTS = {
     buffs = {
         columns = { flow = "rightDown", bar = S, relPoint = BOTTOMLEFT, ox = 0, oy = BAR_GAP },
         pyramid = { flow = "rightDown", bar = M, relPoint = BOTTOMLEFT, ox = 0, oy = BAR_GAP },
@@ -130,18 +128,21 @@ local function SetIconTime(icon, text)
     end
 end
 
--- Effect list (one for buffs, one for debuffs) ------------------------------------
+-- Effect list (one per unit and effect type) ------------------------------------
 local List = {}
 List.__index = List
 List.PER_ROW_MIN, List.PER_ROW_MAX, List.PER_ROW_DEFAULT = PER_ROW_MIN, PER_ROW_MAX, PER_ROW_DEFAULT
 
-local function NewList(key, label, controlPrefix)
+-- o.key    : saved vars key        o.cmd   : slash command (default: key)
+-- o.label  : chat output           o.prefix: icon control names
+-- o.bevel  : "buffs" | "debuffs" frame colors
+local function NewList(o)
     return setmetatable({
-        key = key,                -- "buffs" | "debuffs" (saved vars + placement key)
-        label = label,            -- chat output
-        prefix = controlPrefix,   -- icon control names
-        bevel = BEVELS[key],
-        placements = PLACEMENTS[key],
+        key = o.key,
+        cmd = o.cmd or o.key,
+        label = o.label,
+        prefix = o.prefix,
+        bevel = BEVELS[o.bevel],
         icons = {},
         entries = {},             -- reusable entry tables (no garbage per rebuild)
         order = {},               -- sorted references into entries
@@ -151,17 +152,15 @@ local function NewList(key, label, controlPrefix)
     }, List)
 end
 
-local Buffs = NewList("buffs", "buffs", "AetherUI_Buff")
-local Debuffs = NewList("debuffs", "debuffs", "AetherUI_Debuff")
-AUI.Buffs, AUI.Debuffs = Buffs, Debuffs
-
-function List:Init(sv, enabledDefault)
+-- parent: control the icon container belongs to (shares its visibility).
+function List:Init(sv, parent, tracker)
     local s = sv[self.key]
     if type(s) ~= "table" then s = {}; sv[self.key] = s end
-    if s.enabled == nil then s.enabled = enabledDefault end
+    if s.enabled == nil then s.enabled = true end
     s.perRow = zo_clamp(zo_round(tonumber(s.perRow) or PER_ROW_DEFAULT), PER_ROW_MIN, PER_ROW_MAX)
     self.sv = s
-    self.container = WINDOW_MANAGER:CreateControl(self.prefix .. "Container", AetherUI_Bars, CT_CONTROL)
+    self.tracker = tracker
+    self.container = WINDOW_MANAGER:CreateControl(self.prefix .. "Container", parent, CT_CONTROL)
     self.container:SetHidden(not s.enabled)
 end
 
@@ -178,7 +177,7 @@ function List:CreateIcon(index)
         file = nil, timeText = nil, stackText = nil, ending = 0,
     }
     self.icons[index] = icon
-    self:AnchorIcon(icon)
+    if self.flow then self:AnchorIcon(icon) end
     return icon
 end
 
@@ -194,12 +193,13 @@ function List:AnchorIcon(icon)
     c:SetAnchor(f.point, self.container, f.point, pos * f.ax + line * f.lx, f.by + pos * f.ay + line * f.ly)
 end
 
-function List:ApplyPlacement(layout, bars)
-    local p = self.placements[layout] or self.placements.default
+-- p = { flow, relPoint, ox, oy }; relTo = control to attach to (nil = GuiRoot).
+-- Not a hot path: load / layout change only.
+function List:Place(p, relTo)
     local flow = FLOWS[p.flow]
     local c = self.container
     c:ClearAnchors()
-    c:SetAnchor(flow.point, p.bar and bars[p.bar].control or GuiRoot, p.relPoint, p.ox, p.oy)
+    c:SetAnchor(flow.point, relTo or GuiRoot, p.relPoint, p.ox, p.oy)
     if flow ~= self.flow then
         self.flow = flow
         self:Relayout()
@@ -216,6 +216,7 @@ end
 
 -- Container covers the visible icons (keeps hit tests and debugging honest).
 function List:UpdateContainerSize()
+    if not self.flow then return end
     local n, perRow = self.shown, self.sv.perRow
     local along = n < perRow and n or perRow
     local lines = n > 0 and mceil(n / perRow) or 0
@@ -293,8 +294,9 @@ function List:UpdateTimers(now)
     end
 end
 
--- Drop every icon (list turned off).
+-- Drop every icon (list turned off / tracker suspended).
 function List:Clear()
+    if self.shown == 0 then return end
     self.count = 0
     self:Commit(0)
 end
@@ -306,7 +308,7 @@ function List:SetEnabled(enabled)
     self.sv.enabled = enabled
     self.container:SetHidden(not enabled)
     if not enabled then self:Clear() end
-    AUI.Effects:ApplyEnabled()
+    self.tracker:ApplyEnabled()
 end
 
 -- Returns the applied value, or nil for non-numeric input.
@@ -322,7 +324,7 @@ function List:SetPerRow(count)
 end
 
 function List:HandleCommand(cmd, rest)
-    if cmd ~= self.key then return false end
+    if cmd ~= self.cmd then return false end
     if rest == "on" or rest == "off" then
         self:SetEnabled(rest == "on")
         AUI:Print(self.label .. " " .. rest)
@@ -332,34 +334,146 @@ function List:HandleCommand(cmd, rest)
             AUI:Print(self.label .. " per row: " .. n)
         else
             AUI:Print(sfmt("%s: %s, %d per row. /aether %s <on|off|%d-%d>", self.label,
-                self.sv.enabled and "on" or "off", self.sv.perRow, self.key, PER_ROW_MIN, PER_ROW_MAX))
+                self.sv.enabled and "on" or "off", self.sv.perRow, self.cmd, PER_ROW_MIN, PER_ROW_MAX))
         end
     end
     return true
 end
 
--- Shared driver: events, scan, countdown --------------------------------------------
-local Effects = { registered = false, timerRunning = false }
+-- Tracker: events, scan and countdown for one unit ------------------------------
+local Tracker = {}
+Tracker.__index = Tracker
+
+local function NewTracker(unitTag, name, buffs, debuffs)
+    local t = setmetatable({
+        unitTag = unitTag,
+        name = name,
+        rebuildName = name .. "Rebuild",
+        timerName = name .. "Timer",
+        buffs = buffs,
+        debuffs = debuffs,
+        registered = false,
+        timerRunning = false,
+        suspended = false,   -- owner switched off (target bar disabled)
+    }, Tracker)
+    t.onRebuild = function()
+        EM:UnregisterForUpdate(t.rebuildName)
+        t:Rebuild()
+    end
+    t.onTimer = function()
+        local now = GetFrameTimeSeconds()
+        if buffs.sv.enabled then buffs:UpdateTimers(now) end
+        if debuffs.sv.enabled then debuffs:UpdateTimers(now) end
+    end
+    -- Many effects change in the same moment (e.g. a set proc + its Major/Minor
+    -- buffs). Registering an already registered update is a no-op, so a burst
+    -- collapses into a single rebuild.
+    t.onSchedule = function()
+        EM:RegisterForUpdate(t.rebuildName, REBUILD_MS, t.onRebuild)
+    end
+    return t
+end
+
+function Tracker:IsActive()
+    return not self.suspended and (self.buffs.sv.enabled or self.debuffs.sv.enabled)
+end
+
+function Tracker:ApplyEnabled()
+    local name = self.name
+    if self:IsActive() then
+        if not self.registered then
+            self.registered = true
+            EM:RegisterForEvent(name, EVENT_EFFECT_CHANGED, self.onSchedule)
+            EM:AddFilterForEvent(name, EVENT_EFFECT_CHANGED, REGISTER_FILTER_UNIT_TAG, self.unitTag)
+            EM:RegisterForEvent(name .. "Full", EVENT_EFFECTS_FULL_UPDATE, self.onSchedule)
+            EM:RegisterForEvent(name .. "Activated", EVENT_PLAYER_ACTIVATED, self.onRebuild)
+        end
+        self:Rebuild()
+    else
+        if self.registered then
+            self.registered = false
+            EM:UnregisterForEvent(name, EVENT_EFFECT_CHANGED)
+            EM:UnregisterForEvent(name .. "Full", EVENT_EFFECTS_FULL_UPDATE)
+            EM:UnregisterForEvent(name .. "Activated", EVENT_PLAYER_ACTIVATED)
+        end
+        EM:UnregisterForUpdate(self.rebuildName)
+        self:SetTimerRunning(false)
+        self.buffs:Clear()
+        self.debuffs:Clear()
+    end
+end
+
+function Tracker:SetSuspended(suspended)
+    if self.suspended == suspended then return end
+    self.suspended = suspended
+    self:ApplyEnabled()
+end
+
+-- Rebuild right away, dropping any pending coalesced rebuild (unit changed).
+function Tracker:RebuildNow()
+    EM:UnregisterForUpdate(self.rebuildName)
+    self:Rebuild()
+end
+
+-- One pass over the unit's effects feeds both lists. A unit that does not
+-- exist has no effects, so this also clears the icons.
+function Tracker:Rebuild()
+    if self.suspended then return end
+    local buffs, debuffs = self.buffs, self.debuffs
+    local wantBuffs, wantDebuffs = buffs.sv.enabled, debuffs.sv.enabled
+    if not (wantBuffs or wantDebuffs) then return end
+    local unit = self.unitTag
+    buffs.count, debuffs.count = 0, 0
+    for i = 1, GetNumBuffs(unit) do
+        local _, started, ending, _, stacks, file, _, effectType, _, _, abilityId = GetUnitBuffInfo(unit, i)
+        if file and file ~= "" then
+            if effectType == BUFF then
+                if wantBuffs then buffs:Add(started, ending, stacks, file, abilityId) end
+            elseif effectType == DEBUFF then
+                if wantDebuffs then debuffs:Add(started, ending, stacks, file, abilityId) end
+            end
+        end
+    end
+
+    local now = GetFrameTimeSeconds()
+    local timed = false
+    if wantBuffs and buffs:Commit(now) then timed = true end
+    if wantDebuffs and debuffs:Commit(now) then timed = true end
+    self:SetTimerRunning(timed)
+end
+
+function Tracker:SetTimerRunning(run)
+    if run == self.timerRunning then return end
+    self.timerRunning = run
+    if run then
+        EM:RegisterForUpdate(self.timerName, TIMER_MS, self.onTimer)
+    else
+        EM:UnregisterForUpdate(self.timerName)
+    end
+end
+
+-- Player effects ------------------------------------------------------------------
+local Buffs = NewList({ key = "buffs", label = "buffs", prefix = "AetherUI_Buff", bevel = "buffs" })
+local Debuffs = NewList({ key = "debuffs", label = "debuffs", prefix = "AetherUI_Debuff", bevel = "debuffs" })
+AUI.Buffs, AUI.Debuffs = Buffs, Debuffs
+
+local Effects = {
+    -- Building blocks for other units (Target module).
+    NewList = NewList,
+    NewTracker = NewTracker,
+    BAR_GAP = BAR_GAP,
+}
 AUI.Effects = Effects
 
 function Effects:Initialize(sv)
-    Buffs:Init(sv, true)
-    Debuffs:Init(sv, true)
-
-    self.onRebuild = function()
-        EM:UnregisterForUpdate(REBUILD_NAME)
-        self:Rebuild()
-    end
-    self.onTimer = function()
-        local now = GetFrameTimeSeconds()
-        if Buffs.sv.enabled then Buffs:UpdateTimers(now) end
-        if Debuffs.sv.enabled then Debuffs:UpdateTimers(now) end
-    end
-    self.onSchedule = function() self:ScheduleRebuild() end
+    local tracker = NewTracker("player", "AetherUI_Effects", Buffs, Debuffs)
+    self.tracker = tracker
+    Buffs:Init(sv, AetherUI_Bars, tracker)
+    Debuffs:Init(sv, AetherUI_Bars, tracker)
 
     self.ready = true
     self:ApplyPlacement()
-    self:ApplyEnabled()
+    tracker:ApplyEnabled()
 end
 
 -- Container placement for the active bar layout. Called on load and by
@@ -368,71 +482,10 @@ function Effects:ApplyPlacement()
     if not self.ready then return end
     local RB = AUI.ResourceBars
     local layout, bars = RB.sv.layout, RB.bars
-    Buffs:ApplyPlacement(layout, bars)
-    Debuffs:ApplyPlacement(layout, bars)
-end
-
-function Effects:ApplyEnabled()
-    local any = Buffs.sv.enabled or Debuffs.sv.enabled
-    if any then
-        if not self.registered then
-            self.registered = true
-            EM:RegisterForEvent(NAME, EVENT_EFFECT_CHANGED, self.onSchedule)
-            EM:AddFilterForEvent(NAME, EVENT_EFFECT_CHANGED, REGISTER_FILTER_UNIT_TAG, "player")
-            EM:RegisterForEvent(NAME .. "Full", EVENT_EFFECTS_FULL_UPDATE, self.onSchedule)
-            EM:RegisterForEvent(NAME .. "Activated", EVENT_PLAYER_ACTIVATED, self.onRebuild)
-        end
-        self:Rebuild()
-    else
-        if self.registered then
-            self.registered = false
-            EM:UnregisterForEvent(NAME, EVENT_EFFECT_CHANGED)
-            EM:UnregisterForEvent(NAME .. "Full", EVENT_EFFECTS_FULL_UPDATE)
-            EM:UnregisterForEvent(NAME .. "Activated", EVENT_PLAYER_ACTIVATED)
-        end
-        EM:UnregisterForUpdate(REBUILD_NAME)
-        self:SetTimerRunning(false)
-    end
-end
-
--- Many effects change in the same moment (e.g. a set proc + its Major/Minor
--- buffs). Registering an already registered update is a no-op, so a burst
--- collapses into a single rebuild.
-function Effects:ScheduleRebuild()
-    EM:RegisterForUpdate(REBUILD_NAME, REBUILD_MS, self.onRebuild)
-end
-
--- One pass over the player's effects feeds both lists.
-function Effects:Rebuild()
-    local wantBuffs, wantDebuffs = Buffs.sv.enabled, Debuffs.sv.enabled
-    if not (wantBuffs or wantDebuffs) then return end
-    Buffs.count, Debuffs.count = 0, 0
-    for i = 1, GetNumBuffs("player") do
-        local _, started, ending, _, stacks, file, _, effectType, _, _, abilityId = GetUnitBuffInfo("player", i)
-        if file and file ~= "" then
-            if effectType == BUFF then
-                if wantBuffs then Buffs:Add(started, ending, stacks, file, abilityId) end
-            elseif effectType == DEBUFF then
-                if wantDebuffs then Debuffs:Add(started, ending, stacks, file, abilityId) end
-            end
-        end
-    end
-
-    local now = GetFrameTimeSeconds()
-    local timed = false
-    if wantBuffs and Buffs:Commit(now) then timed = true end
-    if wantDebuffs and Debuffs:Commit(now) then timed = true end
-    self:SetTimerRunning(timed)
-end
-
-function Effects:SetTimerRunning(run)
-    if run == self.timerRunning then return end
-    self.timerRunning = run
-    if run then
-        EM:RegisterForUpdate(TIMER_NAME, TIMER_MS, self.onTimer)
-    else
-        EM:UnregisterForUpdate(TIMER_NAME)
-    end
+    local pb = PLAYER_PLACEMENTS.buffs[layout] or PLAYER_PLACEMENTS.buffs.default
+    local pd = PLAYER_PLACEMENTS.debuffs[layout] or PLAYER_PLACEMENTS.debuffs.default
+    Buffs:Place(pb, pb.bar and bars[pb.bar].control)
+    Debuffs:Place(pd, pd.bar and bars[pd.bar].control)
 end
 
 function Effects:HandleCommand(cmd, rest)

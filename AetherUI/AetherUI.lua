@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.8.0"
+AUI.version = "0.9.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -25,6 +25,18 @@ local DEFAULTS = {
     debuffs = {
         enabled = true,      -- show the player debuff icons
         perRow = 8,          -- icons per row (1-20); default layout: icons per column, bottom -> top
+    },
+    target = {
+        enabled = true,      -- show the target health bar (replaces ESO's target frame)
+        point = nil,         -- { x, y } center of the target bar; nil = LUI target frame spot
+    },
+    targetBuffs = {
+        enabled = true,      -- target buff icons: under the target bar, left to right
+        perRow = 8,          -- icons per row (1-20)
+    },
+    targetDebuffs = {
+        enabled = true,      -- target debuff icons: above the target name, left to right
+        perRow = 8,          -- icons per row (1-20)
     },
     keybinds = {
         defaultsApplied = false, -- default keys (F12 reload, Home house) are set once, never re-applied
@@ -72,7 +84,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20>")
 end
 
 local function OnAddOnLoaded(_, addonName)

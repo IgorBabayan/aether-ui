@@ -126,7 +126,9 @@ local COL_ROW = 12
 local LUI_X, LUI_Y = -492, 205
 local LUI_MAX_ASPECT, BASE_ASPECT = 2.45, 16 / 9
 
-local function LuiOffset()
+-- (bx, by) = LUI base coordinates on a 1080p canvas (frame top-left from the
+-- screen centre). Returns the scaled offset for the current canvas.
+local function LuiOffset(bx, by)
     local sw, sh = GuiRoot:GetDimensions()
     if sw == 0 or sh == 0 then sw, sh = 1920, 1080 end
     local aspect = sw / sh
@@ -136,7 +138,7 @@ local function LuiOffset()
         aScale = LUI_MAX_ASPECT / BASE_ASPECT
         wScale = hScale * aScale
     end
-    return LUI_X * wScale, LUI_Y * (hScale ^ 1.2) * aScale
+    return bx * wScale, by * (hScale ^ 1.2) * aScale
 end
 
 -- separate = true: bars can be dragged one by one (each anchored to the
@@ -199,7 +201,7 @@ local LAYOUTS = {
         -- Unmoved position: Health bar's top-left on LUI's player frame corner.
         -- Health centre = group centre - (bh + COL_ROW), see Anchor above.
         DefaultAnchor = function(tl, g)
-            local x, y = LuiOffset()
+            local x, y = LuiOffset(LUI_X, LUI_Y)
             tl:SetAnchor(CENTER, GuiRoot, CENTER, x + g.hw / 2, y + g.bh * 1.5 + COL_ROW)
         end,
     },
@@ -298,11 +300,15 @@ function Bar:New(...)
     return obj
 end
 
-function Bar:Initialize(parent, powerType, style)
-    local c = CreateControlFromVirtual("AetherUI_Bar" .. style.key, parent, "AetherUI_ResourceBar")
+-- unitTag: "player" (default) or another unit (the target bar). Non-player
+-- bars never fade or pulse low: their visibility belongs to their owner.
+function Bar:Initialize(parent, powerType, style, unitTag, controlName)
+    local c = CreateControlFromVirtual(controlName or ("AetherUI_Bar" .. style.key), parent, "AetherUI_ResourceBar")
     self.control = c
     self.powerType = powerType
     self.style = style
+    self.unitTag = unitTag or "player"
+    self.isPlayer = self.unitTag == "player"
 
     local function child(n) return c:GetNamedChild(n) end
     self.track, self.fillTex, self.trailTex, self.gainTex = child("Track"), child("Fill"), child("Trail"), child("Gain")
@@ -469,6 +475,7 @@ function Bar:SetShield(value)
 end
 
 function Bar:UpdateLow()
+    if not self.isPlayer then return end
     local low = self.max > 0 and self.target <= LOW_THRESHOLD and not IsUnitDead("player")
     if low == self.isLow then return end
     self.isLow = low
@@ -490,6 +497,7 @@ function Bar:Alert()
 end
 
 function Bar:ShouldShow()
+    if not self.isPlayer then return true end
     return RB.unlocked or RB.preview or RB.sv.alwaysShow or RB.inCombat
         or self.target < 0.999 or self.shieldTarget > 0
         or self.alertAnim:IsPlaying()
@@ -545,7 +553,7 @@ function Bar:Step(now, dt)
 end
 
 function Bar:Refresh(instant)
-    local cur, _, effectiveMax = GetUnitPower("player", self.powerType)
+    local cur, _, effectiveMax = GetUnitPower(self.unitTag, self.powerType)
     self:SetValue(cur, effectiveMax, instant)
 end
 
@@ -694,6 +702,12 @@ function RB:RegisterEvents()
     end
 end
 
+-- Shared with the Target module: same bar art, animations and ticker.
+function RB:CreateBar(parent, powerType, unitTag, controlName)
+    return Bar:New(parent, powerType, STYLES[powerType], unitTag, controlName)
+end
+RB.LuiOffset = LuiOffset
+
 -- Layout / visibility (used by the settings panel and slash commands) ---------
 RB.LAYOUT_ORDER = LAYOUT_ORDER
 RB.TEXT_ORDER = TEXT_ORDER
@@ -743,8 +757,10 @@ function RB:ApplyLayout()
         end
     end
 
-    -- Buff / debuff icons follow the layout (no-op until the module is ready).
+    -- Buff / debuff icons follow the layout; the target bar follows the bar
+    -- size (both no-ops until their module is ready).
     if AUI.Effects then AUI.Effects:ApplyPlacement() end
+    if AUI.Target then AUI.Target:ApplyLayout() end
 end
 
 function RB:IsSeparateLayout()
@@ -823,6 +839,7 @@ function RB:SetPreview(enabled)
         tl:SetDrawTier(self.savedDrawTier or DT_LOW)
     end
     self:WakeAll()
+    if AUI.Target then AUI.Target:SetPreview(enabled) end
 end
 
 -- Position / settings ----------------------------------------------------------
@@ -847,6 +864,7 @@ function RB:ResetPosition()
     self.sv.point = nil
     ZO_ClearTable(self.sv.points)
     self:ApplyLayout() -- also re-applies the default position
+    if AUI.Target then AUI.Target:ResetPosition() end
 end
 
 -- Dragging ---------------------------------------------------------------------
@@ -856,9 +874,10 @@ end
 -- pinned the group to the screen bottom while dragging.)
 --   default layout : drag target is one bar, saved to sv.points[key]
 --   other layouts  : drag target is the whole top-level, saved to sv.point
+--   free drag      : any other frame (target bar), saved by its own callback
 -- The poll runs only while the mouse button is held and skips frames where the
 -- cursor has not moved.
-local drag = { control = nil, padX = 0, padY = 0, key = nil, dx = 0, dy = 0, mx = 0, my = 0 }
+local drag = { control = nil, padX = 0, padY = 0, key = nil, save = nil, dx = 0, dy = 0, mx = 0, my = 0 }
 
 local function MoveDragged(force)
     local mx, my = GetUIMousePosition()
@@ -879,10 +898,10 @@ local function OnDragUpdate()
     MoveDragged(false)
 end
 
-local function StartDrag(control, padX, padY, key)
+local function StartDrag(control, padX, padY, key, save)
     local cx, cy = control:GetCenter()
     local mx, my = GetUIMousePosition()
-    drag.control, drag.padX, drag.padY, drag.key = control, padX, padY, key
+    drag.control, drag.padX, drag.padY, drag.key, drag.save = control, padX, padY, key, save
     drag.dx, drag.dy, drag.mx, drag.my = cx - mx, cy - my, mx, my
     EM:RegisterForUpdate(DRAG_NAME, 0, OnDragUpdate)
 end
@@ -897,13 +916,21 @@ function RB:BeginGroupDrag()
     StartDrag(self.topLevel, 0, 0, nil)
 end
 
+-- Drag another frame while unlocked; save(x, y) gets its final centre.
+function RB:BeginFreeDrag(control, padX, padY, save)
+    if drag.control or not self.unlocked then return end
+    StartDrag(control, padX, padY, nil, save)
+end
+
 function RB:EndDrag()
     if not drag.control then return end
     EM:UnregisterForUpdate(DRAG_NAME)
     local x, y = MoveDragged(true)
-    local key = drag.key
-    drag.control, drag.key = nil, nil
-    if key then
+    local key, save = drag.key, drag.save
+    drag.control, drag.key, drag.save = nil, nil, nil
+    if save then
+        save(x, y)
+    elseif key then
         self.sv.points[key] = { x = x, y = y }
     else
         self.sv.point = { x = x, y = y }
@@ -934,11 +961,13 @@ function RB:SetUnlocked(unlocked)
     self.unlocked = unlocked
     self:ApplyDragMode()
     self:WakeAll()
+    if AUI.Target then AUI.Target:SetUnlocked(unlocked) end
 end
 
 function RB:ApplyText()
     local mode = self.sv.text
     for _, bar in pairs(self.bars) do bar:ApplyTextMode(mode) end
+    if AUI.Target then AUI.Target:ApplyText() end
 end
 
 function RB:HandleCommand(cmd, rest)

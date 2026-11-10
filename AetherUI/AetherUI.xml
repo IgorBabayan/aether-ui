@@ -148,6 +148,27 @@
             </Controls>
         </Control>
 
+        <!--
+            Target bar (Target module). The fragment owns the top-level's hidden
+            state; the inner Frame is shown only while there is a target (or a
+            placeholder in unlock / settings preview). The bar and the effect
+            icons are created in Lua inside the Frame.
+        -->
+        <TopLevelControl name="AetherUI_Target" hidden="true" mouseEnabled="false">
+            <Dimensions x="300" y="20" />
+            <Controls>
+                <Control name="$(parent)Frame" hidden="true">
+                    <AnchorFill />
+                    <Controls>
+                        <Label name="$(parent)Name" font="$(BOLD_FONT)|15|soft-shadow-thick" color="E8DCC0"
+                               maxLineCount="1" wrapMode="TEXT_WRAP_MODE_ELLIPSIS" verticalAlignment="BOTTOM" />
+                        <Label name="$(parent)Level" font="$(BOLD_FONT)|13|soft-shadow-thick" color="C8A464"
+                               horizontalAlignment="RIGHT" verticalAlignment="BOTTOM" />
+                    </Controls>
+                </Control>
+            </Controls>
+        </TopLevelControl>
+
         <!-- Dragging and screen clamping are handled in Lua (ResourceBars). -->
         <TopLevelControl name="AetherUI_Bars" hidden="true" mouseEnabled="false">
             <Dimensions x="1080" y="44" />

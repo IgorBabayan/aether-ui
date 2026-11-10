@@ -47,6 +47,8 @@ function Settings:Initialize(sv)
     local RB = AUI.ResourceBars
     local Buffs = AUI.Buffs
     local Debuffs = AUI.Debuffs
+    local Target = AUI.Target
+    local TargetBuffs, TargetDebuffs = AUI.TargetBuffs, AUI.TargetDebuffs
     local bars = sv.bars
 
     local layoutValues, layoutNames, layoutTips = {}, {}, {}
@@ -171,12 +173,65 @@ function Settings:Initialize(sv)
             default = Debuffs.PER_ROW_DEFAULT,
         },
 
+        { type = "header", name = "Target" },
+        {
+            type = "checkbox",
+            name = "Show target bar",
+            tooltip = "Health bar for what you are looking at, in the LUI target frame spot "
+                .. "(lines up with Health in the Columns layout).\nReplaces ESO's own target frame. "
+                .. "Uses the bar width, height and text settings above.",
+            getFunc = function() return sv.target.enabled end,
+            setFunc = function(value) Target:SetEnabled(value) end,
+            default = true,
+        },
+        {
+            type = "checkbox",
+            name = "Show target buffs",
+            tooltip = "Target's buffs under the target bar, left to right, new rows below.\n"
+                .. "Permanent buffs come first, then temporary ones with a timer under the icon.",
+            getFunc = function() return sv.targetBuffs.enabled end,
+            setFunc = function(value) TargetBuffs:SetEnabled(value) end,
+            disabled = function() return not sv.target.enabled end,
+            default = true,
+        },
+        {
+            type = "slider",
+            name = "Target buffs per row",
+            tooltip = "How many target buff icons fit in one row before a new row starts.",
+            min = TargetBuffs.PER_ROW_MIN, max = TargetBuffs.PER_ROW_MAX, step = 1,
+            getFunc = function() return sv.targetBuffs.perRow end,
+            setFunc = function(value) TargetBuffs:SetPerRow(value) end,
+            disabled = function() return not (sv.target.enabled and sv.targetBuffs.enabled) end,
+            default = TargetBuffs.PER_ROW_DEFAULT,
+        },
+        {
+            type = "checkbox",
+            name = "Show target debuffs",
+            tooltip = "Target's debuffs above the target name, left to right, new rows above.\n"
+                .. "Permanent debuffs come first, then temporary ones with a timer under the icon.",
+            getFunc = function() return sv.targetDebuffs.enabled end,
+            setFunc = function(value) TargetDebuffs:SetEnabled(value) end,
+            disabled = function() return not sv.target.enabled end,
+            default = true,
+        },
+        {
+            type = "slider",
+            name = "Target debuffs per row",
+            tooltip = "How many target debuff icons fit in one row before a new row starts.",
+            min = TargetDebuffs.PER_ROW_MIN, max = TargetDebuffs.PER_ROW_MAX, step = 1,
+            getFunc = function() return sv.targetDebuffs.perRow end,
+            setFunc = function(value) TargetDebuffs:SetPerRow(value) end,
+            disabled = function() return not (sv.target.enabled and sv.targetDebuffs.enabled) end,
+            default = TargetDebuffs.PER_ROW_DEFAULT,
+        },
+
         { type = "header", name = "Position" },
         {
             type = "checkbox",
             name = "Unlock bars",
             tooltip = "Drag the bars to a new position. Locked again when this page closes.\n"
-                .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.",
+                .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.\n"
+                .. "The target bar always moves on its own.",
             getFunc = function() return RB.unlocked end,
             setFunc = function(value) RB:SetUnlocked(value) end,
             default = false,
@@ -184,7 +239,8 @@ function Settings:Initialize(sv)
         {
             type = "button",
             name = "Reset position",
-            tooltip = "Move the bars back to their default position.\nColumns layout: same spot as the LUI player frame.",
+            tooltip = "Move the bars back to their default position.\nColumns layout: same spot as the LUI player frame.\n"
+                .. "Target bar: same spot as the LUI target frame.",
             func = function() RB:ResetPosition() end,
             width = "half",
         },
