@@ -222,6 +222,21 @@
             </Controls>
         </TopLevelControl>
 
+        <!--
+            Cast bar (CastBar module). Same pattern as the companion bar: the
+            fragment owns the top-level, the inner Frame is shown only while a
+            cast runs (or as a placeholder in unlock / settings preview). The
+            icon and bar are created in Lua inside the Frame.
+        -->
+        <TopLevelControl name="AetherUI_CastBar" hidden="true" mouseEnabled="false">
+            <Dimensions x="360" y="32" />
+            <Controls>
+                <Control name="$(parent)Frame" hidden="true">
+                    <AnchorFill />
+                </Control>
+            </Controls>
+        </TopLevelControl>
+
         <!-- Dragging and screen clamping are handled in Lua (ResourceBars). -->
         <TopLevelControl name="AetherUI_Bars" hidden="true" mouseEnabled="false">
             <Dimensions x="1080" y="44" />

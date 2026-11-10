@@ -83,6 +83,7 @@ function Settings:Initialize(sv)
     local TargetBuffs, TargetDebuffs = AUI.TargetBuffs, AUI.TargetDebuffs
     local MiniBoss = AUI.MiniBoss
     local Companion = AUI.Companion
+    local CastBar = AUI.CastBar
     local Group = AUI.Group
     local Intro, Books, Pledges = AUI.Intro, AUI.Books, AUI.Pledges
     local bars = sv.bars
@@ -319,6 +320,67 @@ function Settings:Initialize(sv)
             default = true,
         },
 
+        { type = "header", name = "Cast bar" },
+        {
+            type = "checkbox",
+            name = "Show cast bar",
+            tooltip = "A bar for your casts and channels (LUI style): ability icon on the left, "
+                .. "ability name and time left inside the bar.\n"
+                .. "Casts fill up, channels drain. Cancelled by block, dodge, bash, crowd control, "
+                .. "weapon swap, and by moving during a recall.\n"
+                .. "Sits under the screen centre; drag it anywhere while the bars are unlocked.",
+            getFunc = function() return sv.castBar.enabled end,
+            setFunc = function(value) CastBar:SetEnabled(value) end,
+            default = true,
+        },
+        {
+            type = "checkbox",
+            name = "Show heavy attacks",
+            tooltip = "Also show the wind-up of heavy attacks.",
+            getFunc = function() return sv.castBar.heavy end,
+            setFunc = function(value) CastBar:SetHeavy(value) end,
+            disabled = function() return not sv.castBar.enabled end,
+            default = false,
+        },
+        {
+            type = "checkbox",
+            name = "Show ability name",
+            tooltip = "Ability name on the left inside the bar.",
+            getFunc = function() return sv.castBar.label end,
+            setFunc = function(value) CastBar:SetShowLabel(value) end,
+            disabled = function() return not sv.castBar.enabled end,
+            default = true,
+        },
+        {
+            type = "checkbox",
+            name = "Show time left",
+            tooltip = "Seconds left on the right inside the bar, e.g. 1.4.",
+            getFunc = function() return sv.castBar.timer end,
+            setFunc = function(value) CastBar:SetShowTimer(value) end,
+            disabled = function() return not sv.castBar.enabled end,
+            default = true,
+        },
+        {
+            type = "slider",
+            name = "Cast bar width",
+            tooltip = "Length of the cast bar in pixels.",
+            min = CastBar.WIDTH_MIN, max = CastBar.WIDTH_MAX, step = 5,
+            getFunc = function() return sv.castBar.width end,
+            setFunc = function(value) CastBar:SetWidth(value) end,
+            disabled = function() return not sv.castBar.enabled end,
+            default = CastBar.WIDTH_DEFAULT,
+        },
+        {
+            type = "slider",
+            name = "Cast bar height",
+            tooltip = "Thickness of the cast bar in pixels. The ability icon is 10 px taller.",
+            min = CastBar.HEIGHT_MIN, max = CastBar.HEIGHT_MAX, step = 1,
+            getFunc = function() return sv.castBar.height end,
+            setFunc = function(value) CastBar:SetHeight(value) end,
+            disabled = function() return not sv.castBar.enabled end,
+            default = CastBar.HEIGHT_DEFAULT,
+        },
+
         { type = "header", name = "Group frames" },
         {
             type = "checkbox",
@@ -412,6 +474,7 @@ function Settings:Initialize(sv)
                 .. "Default layout: each bar moves on its own.\nOther layouts: all bars move together.\n"
                 .. "The target bar moves on its own; its mini-boss bars and its buffs / debuffs move with it.\n"
                 .. "The companion bar moves on its own.\n"
+                .. "The cast bar moves on its own.\n"
                 .. "The group frames move together as one block.\n"
                 .. "Each buff / debuff group can be dragged on its own.",
             getFunc = function() return RB.unlocked end,
@@ -426,6 +489,7 @@ function Settings:Initialize(sv)
                 .. "Target bar: level with your Health bar, mirrored across the screen centre.\n"
                 .. "Mini-boss bars: beside the target bar.\n"
                 .. "Companion bar: beside Magicka (Columns), under your bars (Pyramid), above Health (Default).\n"
+                .. "Cast bar: under the screen centre, where LUI puts it.\n"
                 .. "Group frames: top-left, where ESO's group frames are.",
             func = function() RB:ResetPosition() end,
             width = "half",

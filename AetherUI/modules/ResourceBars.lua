@@ -894,6 +894,7 @@ function RB:SetPreview(enabled)
     if AUI.Target then AUI.Target:SetPreview(enabled) end
     if AUI.MiniBoss then AUI.MiniBoss:SetPreview(enabled) end
     if AUI.Companion then AUI.Companion:SetPreview(enabled) end
+    if AUI.CastBar then AUI.CastBar:SetPreview(enabled) end
     if AUI.Group then AUI.Group:SetPreview(enabled) end
 end
 
@@ -922,6 +923,7 @@ function RB:ResetPosition()
     if AUI.Effects then AUI.Effects:ResetPosition() end
     if AUI.Target then AUI.Target:ResetPosition() end
     if AUI.Companion then AUI.Companion:ResetPosition() end
+    if AUI.CastBar then AUI.CastBar:ResetPosition() end
     if AUI.Group then AUI.Group:ResetPosition() end
 end
 
@@ -1025,6 +1027,7 @@ function RB:SetUnlocked(unlocked)
     if AUI.Target then AUI.Target:SetUnlocked(unlocked) end
     if AUI.MiniBoss then AUI.MiniBoss:SetUnlocked(unlocked) end
     if AUI.Companion then AUI.Companion:SetUnlocked(unlocked) end
+    if AUI.CastBar then AUI.CastBar:SetUnlocked(unlocked) end
     if AUI.Group then AUI.Group:SetUnlocked(unlocked) end
 end
 
