@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.12.1"
+AUI.version = "0.13.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -48,6 +48,16 @@ local DEFAULTS = {
     companion = {
         enabled = true,      -- companion health bar (replaces ESO's companion frame)
         point = nil,         -- { x, y } dragged centre; nil = centred on the player bars
+    },
+    misc = {
+        skipIntro = true,    -- skip the Bethesda / ZeniMax logo videos at game start (SkipPregameVideos CVar)
+    },
+    books = {
+        autoClose = "read",  -- auto close books: "off" | "read" (already in the Lore Library) | "all"
+        markRead = true,     -- "Read" / "New" tag next to the interact prompt while looking at a lore book
+    },
+    pledges = {
+        enabled = true,      -- mark dungeons of active Undaunted pledges in the Dungeon Finder list
     },
     keybinds = {
         defaultsApplied = false, -- default keys (F12 reload, Home house) are set once, never re-applied
@@ -95,7 +105,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off> | companion <on|off>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off> | companion <on|off> | intro <on|off> | books <off|read|all> | bookmark <on|off> | pledges <on|off>")
 end
 
 local function OnAddOnLoaded(_, addonName)

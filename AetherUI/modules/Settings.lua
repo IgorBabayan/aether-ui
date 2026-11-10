@@ -40,6 +40,17 @@ local TEXT_TOOLTIPS = {
     both = "Current / max and percentage, e.g. 18,240 / 24,000  (76%).",
 }
 
+local BOOK_CLOSE_LABELS = {
+    off = "Off",
+    read = "Already read",
+    all = "All books",
+}
+local BOOK_CLOSE_TOOLTIPS = {
+    off = "Books open as usual.",
+    read = "Books already in your Lore Library close at once. New books still open.",
+    all = "Every book you pick up in the world closes at once. Lore is still learned.",
+}
+
 function Settings:Initialize(sv)
     local LAM = LibAddonMenu2
     if not LAM then return end
@@ -51,7 +62,14 @@ function Settings:Initialize(sv)
     local TargetBuffs, TargetDebuffs = AUI.TargetBuffs, AUI.TargetDebuffs
     local MiniBoss = AUI.MiniBoss
     local Companion = AUI.Companion
+    local Intro, Books, Pledges = AUI.Intro, AUI.Books, AUI.Pledges
     local bars = sv.bars
+
+    local closeNames, closeTips = {}, {}
+    for i, key in ipairs(Books.CLOSE_ORDER) do
+        closeNames[i] = BOOK_CLOSE_LABELS[key] or key
+        closeTips[i] = BOOK_CLOSE_TOOLTIPS[key] or ""
+    end
 
     local layoutValues, layoutNames, layoutTips = {}, {}, {}
     for i, key in ipairs(RB.LAYOUT_ORDER) do
@@ -256,6 +274,48 @@ function Settings:Initialize(sv)
                 .. "Uses the bar height and text settings above.",
             getFunc = function() return sv.companion.enabled end,
             setFunc = function(value) Companion:SetEnabled(value) end,
+            default = true,
+        },
+
+        { type = "header", name = "General" },
+        {
+            type = "checkbox",
+            name = "Skip intro",
+            tooltip = "Skip the Bethesda and ZeniMax logo videos when the game starts.\n"
+                .. "Takes effect from the next game start. The game only allows this once the videos were watched once.",
+            getFunc = function() return sv.misc.skipIntro end,
+            setFunc = function(value) Intro:SetEnabled(value) end,
+            default = true,
+        },
+        {
+            type = "dropdown",
+            name = "Auto close books",
+            tooltip = "Close books you pick up in the world right away.\n"
+                .. "The book is still learned. Books opened from the Lore Library, quest journal or inventory always show.",
+            choices = closeNames,
+            choicesValues = Books.CLOSE_ORDER,
+            choicesTooltips = closeTips,
+            getFunc = function() return sv.books.autoClose end,
+            setFunc = function(value) Books:SetAutoClose(value) end,
+            default = "read",
+        },
+        {
+            type = "checkbox",
+            name = "Mark read books",
+            tooltip = "While you look at a lore book, a tag next to the interact prompt (near the cursor) shows "
+                .. "whether it is already in your Lore Library (Read) or not (New).",
+            getFunc = function() return sv.books.markRead end,
+            setFunc = function(value) Books:SetMarkRead(value) end,
+            default = true,
+        },
+        {
+            type = "checkbox",
+            name = "Mark pledge dungeons",
+            tooltip = "In the Dungeon Finder list (Group & Activity Finder > Dungeons), mark the dungeons of the "
+                .. "Undaunted pledges you have taken.\n"
+                .. "Pledge icon: pledge taken. Check mark: pledge done, ready to hand in.",
+            getFunc = function() return sv.pledges.enabled end,
+            setFunc = function(value) Pledges:SetEnabled(value) end,
             default = true,
         },
 
