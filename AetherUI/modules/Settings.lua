@@ -87,6 +87,7 @@ function Settings:Initialize(sv)
     local Group = AUI.Group
     local Intro, Books, Pledges = AUI.Intro, AUI.Books, AUI.Pledges
     local Keybinds = AUI.Keybinds
+    local Panel = AUI.Panel
     local bars = sv.bars
 
     -- One button per unlocked collectible of a summon group, built once here
@@ -107,6 +108,39 @@ function Settings:Initialize(sv)
                 end,
                 func = function() Keybinds.Summon(id) end,
                 width = "half",
+            }
+        end
+        return controls
+    end
+
+    -- One checkbox per unlocked collectible of a summon group: on the panel or
+    -- not. Built once here, like the summon buttons above.
+    local function PanelToggles(groupKey, noneText)
+        local ids = Keybinds:GetUnlocked(groupKey)
+        if #ids == 0 then
+            return { { type = "description", text = noneText } }
+        end
+        local function off() return not sv.panel.enabled end
+        local controls = {}
+        if #ids > 1 then
+            controls[1] = {
+                type = "button", name = "Show all", width = "half", disabled = off,
+                func = function() for i = 1, #ids do Panel:SetShown(ids[i], true) end end,
+            }
+            controls[2] = {
+                type = "button", name = "Hide all", width = "half", disabled = off,
+                func = function() for i = 1, #ids do Panel:SetShown(ids[i], false) end end,
+            }
+        end
+        for i = 1, #ids do
+            local id = ids[i]
+            controls[#controls + 1] = {
+                type = "checkbox",
+                name = zo_iconTextFormat(GetCollectibleIcon(id), 24, 24, Keybinds.CollectibleName(id)),
+                getFunc = function() return Panel:IsShown(id) end,
+                setFunc = function(value) Panel:SetShown(id, value) end,
+                disabled = off,
+                default = true,
             }
         end
         return controls
@@ -414,6 +448,8 @@ function Settings:Initialize(sv)
                 .. "Health bar color follows each member's role and changes when they switch role.\n"
                 .. "Leader crown and name on the left, health (or Dead / Offline) on the right.\n"
                 .. "Out of range members are dimmed. Group companions are not shown.\n"
+                .. "Right-click a member (cursor shown with .) for the LUI menu: whisper, visit house, "
+                .. "travel to player, add friend, kick, promote to leader, leave group.\n"
                 .. "Drag them anywhere while the bars are unlocked.",
             getFunc = function() return sv.group.enabled end,
             setFunc = function(value) Group:SetEnabled(value) end,
@@ -465,6 +501,32 @@ function Settings:Initialize(sv)
             name = "Companions",
             tooltip = "Companions you own.",
             controls = SummonButtons("companion", "No companions unlocked."),
+        },
+
+        { type = "header", name = "Summon panel" },
+        {
+            type = "checkbox",
+            name = "Show summon panel",
+            tooltip = "Press . (show cursor) and a column of summon buttons appears on the left edge of the screen, "
+                .. "like the Bandits UI side panel.\n"
+                .. "Assistants on top, then a line, then companions.\n"
+                .. "Click a button to summon, click again to dismiss. The ones out now have a bronze frame.\n"
+                .. "Hidden again when the cursor goes away or a menu opens.",
+            getFunc = function() return sv.panel.enabled end,
+            setFunc = function(value) Panel:SetEnabled(value) end,
+            default = true,
+        },
+        {
+            type = "submenu",
+            name = "Assistants on the panel",
+            tooltip = "Choose which of your assistants get a button on the panel.",
+            controls = PanelToggles("assistant", "No assistants unlocked."),
+        },
+        {
+            type = "submenu",
+            name = "Companions on the panel",
+            tooltip = "Choose which of your companions get a button on the panel.",
+            controls = PanelToggles("companion", "No companions unlocked."),
         },
 
         { type = "header", name = "General" },

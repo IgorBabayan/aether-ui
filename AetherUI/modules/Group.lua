@@ -13,6 +13,9 @@
 -- both. Out of support range = dimmed, offline = more dimmed.
 -- Drag and drop (unlock mode): the whole grid moves as one piece; its
 -- top-left corner is saved, so it grows right / down when the group grows.
+-- Right-click a member (cursor mode) for the LUI context menu: whisper,
+-- visit house, Tales of Tribute invite, travel to player, add friend, kick /
+-- disband / leave group, promote to leader.
 --
 -- Performance:
 --   * same Bar class as the player bars: one shared ticker that runs only
@@ -27,6 +30,8 @@
 --     controls only when they change; bars are re-anchored only when the grid
 --     changes (small group <-> raid, or new bars)
 --   * not grouped = frame hidden, nothing runs; disabled = no events at all
+--   * the context menu is built only on right-click; one shared handler for
+--     every bar (the slot is stored on the control)
 --   * ESO's frames are switched off with their own hide-reason system (no
 --     reparenting, nothing per frame) and handed back when disabled
 
@@ -43,6 +48,8 @@ local IsUnitDead = IsUnitDead
 local IsUnitGroupLeader = IsUnitGroupLeader
 local IsUnitInGroupSupportRange = IsUnitInGroupSupportRange
 local zo_strformat = zo_strformat
+local AreUnitsEqual = AreUnitsEqual
+local DoesUnitExist = DoesUnitExist
 
 local NAME = "AetherUI_Group"
 local REBUILD_NAME = NAME .. "Rebuild"
@@ -222,6 +229,76 @@ function Group:SetDefaultFramesHidden(hidden)
     end
 end
 
+-- Context menu (LUI) -------------------------------------------------------------------
+-- Same entries and rules as LuiExtended's group frames (and ESO's group list).
+local function ShowMemberMenu(control, unitTag)
+    ClearMenu()
+    local isPlayer = AreUnitsEqual(unitTag, "player")
+    local isLFG = DoesGroupModificationRequireVote()
+    local displayName = zo_strformat("<<C:1>>", GetUnitDisplayName(unitTag))
+    local characterName = GetUnitName(unitTag)
+    local isOnline = IsUnitOnline(unitTag)
+    local playerIsLeader = IsUnitGroupLeader("player")
+
+    if isPlayer then
+        AddMenuItem(GetString(SI_GROUP_LIST_MENU_LEAVE_GROUP), function()
+            ZO_Dialogs_ShowDialog("GROUP_LEAVE_DIALOG")
+        end)
+    elseif isOnline then
+        if IsChatSystemAvailableForCurrentPlatform() then
+            AddMenuItem(GetString(SI_SOCIAL_LIST_PANEL_WHISPER), function()
+                StartChatInput("", CHAT_CHANNEL_WHISPER, characterName)
+            end)
+        end
+        AddMenuItem(GetString(SI_SOCIAL_MENU_VISIT_HOUSE), function()
+            JumpToHouse(displayName)
+        end)
+        if not ZO_IsTributeLocked() then
+            AddMenuItem(GetString(SI_SOCIAL_MENU_TRIBUTE_INVITE), function()
+                InviteToTributeByDisplayName(displayName)
+            end)
+        end
+        AddMenuItem(GetString(SI_SOCIAL_MENU_JUMP_TO_PLAYER), function()
+            JumpToGroupMember(characterName)
+        end)
+    end
+
+    if not isPlayer and not IsFriend(displayName) and not IsIgnored(displayName) then
+        AddMenuItem(GetString(SI_SOCIAL_MENU_ADD_FRIEND), function()
+            ZO_Dialogs_ShowDialog("REQUEST_FRIEND", { name = displayName })
+        end)
+    end
+
+    if IsGroupModificationAvailable() and playerIsLeader and not isLFG then
+        if isPlayer then
+            AddMenuItem(GetString(SI_GROUP_LIST_MENU_DISBAND_GROUP), function()
+                ZO_Dialogs_ShowDialog("GROUP_DISBAND_DIALOG")
+            end)
+        else
+            AddMenuItem(GetString(SI_GROUP_LIST_MENU_KICK_FROM_GROUP), function()
+                GroupKick(unitTag)
+            end)
+        end
+    end
+
+    -- Promoting is not "group modification" (ESO's own rule).
+    if playerIsLeader and not isPlayer and isOnline then
+        AddMenuItem(GetString(SI_GROUP_LIST_MENU_PROMOTE_TO_LEADER), function()
+            GroupPromote(unitTag)
+        end)
+    end
+
+    ShowMenu(control)
+end
+
+-- One handler for every bar; placeholder bars (no tag) do nothing.
+local function OnBarMouseUp(control, button, upInside)
+    if button ~= MOUSE_BUTTON_INDEX_RIGHT or not upInside then return end
+    local slot = control.aetherSlot
+    local tag = slot and slot.tag
+    if tag and DoesUnitExist(tag) then ShowMemberMenu(control, tag) end
+end
+
 -- Slots ----------------------------------------------------------------------------
 local function NewLabel(name, parent, align)
     local label = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
@@ -293,6 +370,12 @@ function Group:GetSlot(i)
         tag = nil, name = nil, role = "dd", status = nil, leader = false, alpha = 1, grid = nil,
     }
     self.slots[i] = slot
+    -- Right-click menu. Off in unlock mode, where the top-level takes the
+    -- mouse for dragging (a mouse-enabled child would swallow the drag).
+    c.aetherSlot = slot
+    c:SetHitInsets(-4, -4, 4, 4)
+    c:SetHandler("OnMouseUp", OnBarMouseUp)
+    c:SetMouseEnabled(not self.unlocked)
     self:ApplySlotText(slot)
     return slot
 end
@@ -612,6 +695,8 @@ function Group:ApplyDrag()
     self.topLevel:SetMouseEnabled(on)
     self.dragOverlay:SetHidden(not on)
     self.dragLabel:SetHidden(not on)
+    local menu = not self.unlocked
+    for i = 1, #self.slots do self.slots[i].bar.control:SetMouseEnabled(menu) end
 end
 
 function Group:SetUnlocked(unlocked)

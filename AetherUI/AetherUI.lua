@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.16.0"
+AUI.version = "0.17.0"
 AUI.modules = {}
 
 local SV_VERSION = 1
@@ -69,6 +69,10 @@ local DEFAULTS = {
         },
         point = nil,         -- { x, y } dragged top-left corner; nil = ESO's group frame spot
     },
+    panel = {
+        enabled = true,      -- summon panel on "." (cursor mode), left screen edge (Bandits UI side panel)
+        hidden = {},         -- [collectibleId] = true: owned but kept off the panel (new unlocks show)
+    },
     misc = {
         skipIntro = true,    -- skip the Bethesda / ZeniMax logo videos at game start (SkipPregameVideos CVar)
     },
@@ -125,7 +129,7 @@ local function OnSlashCommand(args)
         local m = AUI.modules[i]
         if m.HandleCommand and m:HandleCommand(cmd, rest) then return end
     end
-    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off> | companion <on|off> | castbar <on|off|heavy> | group <on|off> | groupname <character|account|both> | intro <on|off> | books <off|read|all> | bookmark <on|off> | pledges <on|off>")
+    AUI:Print("commands: /aether settings | unlock | lock | reset | text <none|value|percent|both> | always | layout <default|pyramid|columns> | width <150-600> | height <6-40> | buffs <on|off|1-20> | debuffs <on|off|1-20> | target <on|off> | tbuffs <on|off|1-20> | tdebuffs <on|off|1-20> | miniboss <on|off> | companion <on|off> | castbar <on|off|heavy> | group <on|off> | groupname <character|account|both> | panel <on|off> | intro <on|off> | books <off|read|all> | bookmark <on|off> | pledges <on|off>")
 end
 
 local function OnAddOnLoaded(_, addonName)
