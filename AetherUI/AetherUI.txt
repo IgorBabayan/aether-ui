@@ -1,11 +1,11 @@
 ## Title: |cC8A464Aether|rUI
 ## Author: IgorBabayan
-## Version: 0.15.0
-## AddOnVersion: 17
+## Version: 0.16.0
+## AddOnVersion: 18
 ## APIVersion: 101047 101048
 ## SavedVariables: AetherUI_SV
 ## OptionalDependsOn: LibAddonMenu-2.0>=32
-## Description: A clean, immersive interface. Skyrim (RFAD) styled player resource bars, target bar, mini-boss bars, companion bar, cast bar, group and raid frames, buffs and debuffs, plus handy keybinds, intro skip, book auto close / read marks and Undaunted pledge marks.
+## Description: A clean, immersive interface. Skyrim (RFAD) styled player resource bars, target bar, mini-boss bars, companion bar, cast bar, group and raid frames, buffs and debuffs, plus handy keybinds, one-click summon of every owned assistant and companion, intro skip, book auto close / read marks and Undaunted pledge marks.
 
 AetherUI.lua
 AetherUI.xml
@@ -21,5 +21,5 @@ modules/Group.lua
 modules/Intro.lua
 modules/Books.lua
 modules/Pledges.lua
-modules/Settings.lua
 modules/Keybinds.lua
+modules/Settings.lua

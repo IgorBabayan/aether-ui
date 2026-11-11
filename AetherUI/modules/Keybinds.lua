@@ -3,35 +3,60 @@
 --   * Reload Interface           default F12
 --   * Teleport to Primary House  default Home
 --   * Summon <Companion>         one per companion, unbound by default
+--   * Summon <Assistant>         one per assistant (banker, merchant, fence,
+--                                ragpicker, armory...), unbound by default
 --
 -- Defaults are applied once per account and only when the key is free, so a
 -- user's own binds (or a later unbind) are never overwritten.
 --
--- Performance: no events, no polling. The companion list is read once at load;
--- a key press is a table lookup plus one API call.
+-- Performance: no events, no polling. The collectible lists are read once at
+-- load; a key press is a table lookup plus one API call.
 
 local AUI = AetherUI
 
+local GetCollectibleName = GetCollectibleName
+local IsCollectibleUnlocked = IsCollectibleUnlocked
+local UseCollectible = UseCollectible
+local zo_strformat = zo_strformat
+
 local Keybinds = {}
 AUI.Keybinds = Keybinds
-
-local MAX_COMPANION_SLOTS = 16 -- must match the slots in Bindings.xml
-local SUMMON_ACTION = "AETHERUI_SUMMON_COMPANION_"
 
 local DEFAULT_BINDS = {
     { action = "AETHERUI_RELOAD_UI", key = KEY_F12 },
     { action = "AETHERUI_JUMP_PRIMARY_HOUSE", key = KEY_HOME },
 }
 
-local companionIds = {} -- slot -> collectibleId
+-- Summonable collectible groups. maxSlots must match the slots in Bindings.xml.
+local SUMMON_GROUPS = {
+    companion = {
+        categoryType = COLLECTIBLE_CATEGORY_TYPE_COMPANION,
+        action = "AETHERUI_SUMMON_COMPANION_",
+        maxSlots = 16,
+        ids = {},   -- slot -> collectibleId
+    },
+    assistant = {
+        categoryType = COLLECTIBLE_CATEGORY_TYPE_ASSISTANT,
+        action = "AETHERUI_SUMMON_ASSISTANT_",
+        maxSlots = 32,
+        ids = {},
+    },
+}
+Keybinds.SUMMON_ORDER = { "assistant", "companion" }
 
 ZO_CreateStringId("SI_BINDING_NAME_AETHERUI_RELOAD_UI", "Reload Interface")
 ZO_CreateStringId("SI_BINDING_NAME_AETHERUI_JUMP_PRIMARY_HOUSE", "Teleport to Primary House")
 
--- Every companion collectible (owned or not), sorted by id so slots stay stable
--- when new companions are added to the game or unlocked.
-local function BuildCompanionSlots()
-    local categoryType = COLLECTIBLE_CATEGORY_TYPE_COMPANION
+local function CollectibleName(id)
+    return zo_strformat(SI_COLLECTIBLE_NAME_FORMATTER, GetCollectibleName(id))
+end
+Keybinds.CollectibleName = CollectibleName
+
+-- Every collectible of the group (owned or not), sorted by id so slots stay
+-- stable when new ones are added to the game or unlocked.
+local function BuildSlots(group)
+    local categoryType = group.categoryType
+    if not categoryType then return end
     local ids = {}
     for i = 1, GetTotalCollectiblesByCategoryType(categoryType) do
         local id = GetCollectibleIdFromType(categoryType, i)
@@ -39,11 +64,11 @@ local function BuildCompanionSlots()
     end
     table.sort(ids)
 
-    for slot = 1, zo_min(#ids, MAX_COMPANION_SLOTS) do
+    local slots = group.ids
+    for slot = 1, zo_min(#ids, group.maxSlots) do
         local id = ids[slot]
-        companionIds[slot] = id
-        local name = zo_strformat(SI_COLLECTIBLE_NAME_FORMATTER, GetCollectibleName(id))
-        ZO_CreateStringId("SI_BINDING_NAME_" .. SUMMON_ACTION .. slot, "Summon " .. name)
+        slots[slot] = id
+        ZO_CreateStringId("SI_BINDING_NAME_" .. group.action .. slot, "Summon " .. CollectibleName(id))
     end
 end
 
@@ -85,18 +110,42 @@ function Keybinds.JumpToPrimaryHouse()
     RequestJumpToHouse(houseId)
 end
 
-function Keybinds.SummonCompanion(slot)
-    local id = companionIds[slot]
+-- Summon (or dismiss, if already out) one companion / assistant collectible.
+function Keybinds.Summon(id)
     if not id then return end
     if not IsCollectibleUnlocked(id) then
-        AUI:Print(zo_strformat(SI_COLLECTIBLE_NAME_FORMATTER, GetCollectibleName(id)) .. " is not unlocked.")
+        AUI:Print(CollectibleName(id) .. " is not unlocked.")
         return
     end
     UseCollectible(id) -- toggles: summons, or dismisses if already active
 end
 
+function Keybinds.SummonCompanion(slot)
+    Keybinds.Summon(SUMMON_GROUPS.companion.ids[slot])
+end
+
+function Keybinds.SummonAssistant(slot)
+    Keybinds.Summon(SUMMON_GROUPS.assistant.ids[slot])
+end
+
+-- Unlocked collectibles of a group ("assistant" | "companion"), in slot order.
+-- Not a hot path: called once when the settings page is built.
+function Keybinds:GetUnlocked(groupKey)
+    local out = {}
+    local group = SUMMON_GROUPS[groupKey]
+    if not group then return out end
+    local ids = group.ids
+    for slot = 1, #ids do
+        local id = ids[slot]
+        if IsCollectibleUnlocked(id) then out[#out + 1] = id end
+    end
+    return out
+end
+
 function Keybinds:Initialize(sv)
-    BuildCompanionSlots()
+    for _, key in ipairs(self.SUMMON_ORDER) do
+        BuildSlots(SUMMON_GROUPS[key])
+    end
     ApplyDefaultBinds(sv.keybinds)
 end
 

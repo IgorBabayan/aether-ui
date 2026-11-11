@@ -29,6 +29,43 @@
             <Action name="AETHERUI_SUMMON_COMPANION_14"><Down>AetherUI.Keybinds.SummonCompanion(14)</Down></Action>
             <Action name="AETHERUI_SUMMON_COMPANION_15"><Down>AetherUI.Keybinds.SummonCompanion(15)</Down></Action>
             <Action name="AETHERUI_SUMMON_COMPANION_16"><Down>AetherUI.Keybinds.SummonCompanion(16)</Down></Action>
+
+            <!--
+                One slot per assistant (banker, merchant, fence, ragpicker, armory...),
+                same rules as the companion slots above.
+            -->
+            <Action name="AETHERUI_SUMMON_ASSISTANT_1"><Down>AetherUI.Keybinds.SummonAssistant(1)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_2"><Down>AetherUI.Keybinds.SummonAssistant(2)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_3"><Down>AetherUI.Keybinds.SummonAssistant(3)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_4"><Down>AetherUI.Keybinds.SummonAssistant(4)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_5"><Down>AetherUI.Keybinds.SummonAssistant(5)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_6"><Down>AetherUI.Keybinds.SummonAssistant(6)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_7"><Down>AetherUI.Keybinds.SummonAssistant(7)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_8"><Down>AetherUI.Keybinds.SummonAssistant(8)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_9"><Down>AetherUI.Keybinds.SummonAssistant(9)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_10"><Down>AetherUI.Keybinds.SummonAssistant(10)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_11"><Down>AetherUI.Keybinds.SummonAssistant(11)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_12"><Down>AetherUI.Keybinds.SummonAssistant(12)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_13"><Down>AetherUI.Keybinds.SummonAssistant(13)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_14"><Down>AetherUI.Keybinds.SummonAssistant(14)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_15"><Down>AetherUI.Keybinds.SummonAssistant(15)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_16"><Down>AetherUI.Keybinds.SummonAssistant(16)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_17"><Down>AetherUI.Keybinds.SummonAssistant(17)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_18"><Down>AetherUI.Keybinds.SummonAssistant(18)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_19"><Down>AetherUI.Keybinds.SummonAssistant(19)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_20"><Down>AetherUI.Keybinds.SummonAssistant(20)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_21"><Down>AetherUI.Keybinds.SummonAssistant(21)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_22"><Down>AetherUI.Keybinds.SummonAssistant(22)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_23"><Down>AetherUI.Keybinds.SummonAssistant(23)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_24"><Down>AetherUI.Keybinds.SummonAssistant(24)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_25"><Down>AetherUI.Keybinds.SummonAssistant(25)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_26"><Down>AetherUI.Keybinds.SummonAssistant(26)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_27"><Down>AetherUI.Keybinds.SummonAssistant(27)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_28"><Down>AetherUI.Keybinds.SummonAssistant(28)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_29"><Down>AetherUI.Keybinds.SummonAssistant(29)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_30"><Down>AetherUI.Keybinds.SummonAssistant(30)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_31"><Down>AetherUI.Keybinds.SummonAssistant(31)</Down></Action>
+            <Action name="AETHERUI_SUMMON_ASSISTANT_32"><Down>AetherUI.Keybinds.SummonAssistant(32)</Down></Action>
         </Category>
     </Layer>
 </Bindings>

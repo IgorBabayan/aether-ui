@@ -4,7 +4,7 @@ AetherUI = AetherUI or {}
 local AUI = AetherUI
 
 AUI.name = "AetherUI"
-AUI.version = "0.15.0"
+AUI.version = "0.16.0"
 AUI.modules = {}
 
 local SV_VERSION = 1

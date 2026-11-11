@@ -86,7 +86,31 @@ function Settings:Initialize(sv)
     local CastBar = AUI.CastBar
     local Group = AUI.Group
     local Intro, Books, Pledges = AUI.Intro, AUI.Books, AUI.Pledges
+    local Keybinds = AUI.Keybinds
     local bars = sv.bars
+
+    -- One button per unlocked collectible of a summon group, built once here
+    -- (collectibles unlocked later appear after /reloadui).
+    local function SummonButtons(groupKey, noneText)
+        local ids = Keybinds:GetUnlocked(groupKey)
+        if #ids == 0 then
+            return { { type = "description", text = noneText } }
+        end
+        local controls = {}
+        for i = 1, #ids do
+            local id = ids[i]
+            controls[i] = {
+                type = "button",
+                name = Keybinds.CollectibleName(id),
+                tooltip = function()
+                    return IsCollectibleActive(id) and "Out now. Click to dismiss." or "Click to summon."
+                end,
+                func = function() Keybinds.Summon(id) end,
+                width = "half",
+            }
+        end
+        return controls
+    end
 
     local closeNames, closeTips = {}, {}
     for i, key in ipairs(Books.CLOSE_ORDER) do
@@ -422,6 +446,26 @@ function Settings:Initialize(sv)
         RoleColor("tank"),
         RoleColor("healer"),
         RoleColor("dd"),
+
+        { type = "header", name = "Summon" },
+        {
+            type = "description",
+            text = "Summon any assistant or companion you own with one click. Click again to dismiss it.\n"
+                .. "Only one assistant and one companion can be out at a time: summoning another replaces it.\n"
+                .. "Each one also has its own key in Controls > Keybindings > AetherUI (unbound by default).",
+        },
+        {
+            type = "submenu",
+            name = "Assistants",
+            tooltip = "Bankers, merchants, fences, the ragpicker, armory and other assistants you own.",
+            controls = SummonButtons("assistant", "No assistants unlocked."),
+        },
+        {
+            type = "submenu",
+            name = "Companions",
+            tooltip = "Companions you own.",
+            controls = SummonButtons("companion", "No companions unlocked."),
+        },
 
         { type = "header", name = "General" },
         {
